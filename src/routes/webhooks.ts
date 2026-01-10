@@ -13,7 +13,11 @@ const prisma = new PrismaClient();
 router.post("/twilio/whatsapp", async (req: Request, res: Response) => {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
-  console.log(`[WEBHOOK] ${timestamp} - Webhook recibido de Twilio`);
+  console.log(`[WEBHOOK] ${timestamp} - ========== WEBHOOK RECIBIDO ==========`);
+  console.log(`[WEBHOOK] Método: ${req.method}`);
+  console.log(`[WEBHOOK] URL: ${req.url}`);
+  console.log(`[WEBHOOK] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`[WEBHOOK] Body:`, JSON.stringify(req.body, null, 2));
 
   try {
     // Construir URL completa para validación
@@ -21,10 +25,18 @@ router.post("/twilio/whatsapp", async (req: Request, res: Response) => {
     const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_BASE_URL || "http://localhost:3000";
     const webhookPath = process.env.TWILIO_WEBHOOK_PATH || "/webhooks/twilio/whatsapp";
     const fullUrl = `${baseUrl}${webhookPath}`;
+    
+    console.log(`[WEBHOOK] Base URL: ${baseUrl}`);
+    console.log(`[WEBHOOK] Webhook Path: ${webhookPath}`);
+    console.log(`[WEBHOOK] Full URL para validación: ${fullUrl}`);
 
     // Validar firma de Twilio en producción
     const signature = req.headers["x-twilio-signature"] as string;
     const isProduction = process.env.NODE_ENV === "production";
+    
+    console.log(`[WEBHOOK] X-Twilio-Signature presente: ${!!signature}`);
+    console.log(`[WEBHOOK] NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`[WEBHOOK] Es producción: ${isProduction}`);
 
     if (signature) {
       const isValid = validateTwilioSignature(req, fullUrl);
