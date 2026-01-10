@@ -3,16 +3,37 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
-const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER;
+/**
+ * Obtiene las credenciales de Twilio y valida que estén presentes
+ */
+const getTwilioCredentials = () => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
+  const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER;
 
-if (!accountSid || !authToken || !fromNumber) {
-  throw new Error("Twilio credentials are required in environment variables");
-}
+  if (!accountSid || !authToken || !fromNumber) {
+    throw new Error(
+      "Se requieren credenciales de Twilio en las variables de entorno. " +
+      "Asegúrate de configurar: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM"
+    );
+  }
 
-const client = twilio(accountSid, authToken);
+  return {
+    accountSid,
+    authToken,
+    fromNumber,
+    myWhatsAppNumber: myWhatsAppNumber || null,
+  };
+};
+
+/**
+ * Crea el cliente de Twilio (lazy initialization)
+ */
+const getTwilioClient = () => {
+  const { accountSid, authToken } = getTwilioCredentials();
+  return twilio(accountSid, authToken);
+};
 
 interface SendMessageParams {
   to: string;
@@ -27,8 +48,12 @@ export const sendWhatsAppMessage = async ({
   body,
 }: SendMessageParams): Promise<string> => {
   try {
+    // Obtener credenciales y cliente de Twilio
+    const credentials = getTwilioCredentials();
+    const client = getTwilioClient();
+
     const message = await client.messages.create({
-      from: fromNumber!,
+      from: credentials.fromNumber,
       to: to,
       body: body,
     });
@@ -37,7 +62,7 @@ export const sendWhatsAppMessage = async ({
     await prisma.message.create({
       data: {
         direction: "outbound",
-        from: fromNumber!,
+        from: credentials.fromNumber,
         to: to,
         body: body,
         twilioSid: message.sid,
@@ -59,6 +84,9 @@ export const forwardToMyWhatsApp = async (
   from: string,
   body: string
 ): Promise<void> => {
+  const credentials = getTwilioCredentials();
+  const myWhatsAppNumber = credentials.myWhatsAppNumber;
+
   if (!myWhatsAppNumber) {
     console.warn("MY_WHATSAPP_NUMBER no configurado, no se reenviará el mensaje");
     return;
