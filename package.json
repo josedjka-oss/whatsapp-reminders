@@ -13,7 +13,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "render-build": "npm install && npm run build && npx prisma migrate deploy"
+    "render-build": "npm install --include=dev && prisma generate && tsc && npx prisma migrate deploy"
   },
   "engines": {
     "node": "20"
