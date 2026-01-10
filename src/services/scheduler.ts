@@ -76,14 +76,29 @@ const processReminders = async (): Promise<void> => {
     const now = new Date();
     console.log(`[SCHEDULER] ${now.toISOString()} - Verificando recordatorios activos...`);
 
-    // Obtener recordatorios activos
-    const reminders = await prisma.reminder.findMany({
-      where: {
-        isActive: true,
-      },
-    });
+    // Verificar conexión a base de datos primero
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError: any) {
+      console.error(`[SCHEDULER] ❌ Error de conexión a base de datos:`, dbError.message);
+      console.error(`[SCHEDULER] Stack trace:`, dbError.stack);
+      return; // Salir temprano si no hay conexión a DB
+    }
 
-    console.log(`[SCHEDULER] Encontrados ${reminders.length} recordatorios activos`);
+    // Obtener recordatorios activos
+    let reminders;
+    try {
+      reminders = await prisma.reminder.findMany({
+        where: {
+          isActive: true,
+        },
+      });
+      console.log(`[SCHEDULER] Encontrados ${reminders.length} recordatorios activos`);
+    } catch (queryError: any) {
+      console.error(`[SCHEDULER] ❌ Error consultando recordatorios:`, queryError.message);
+      console.error(`[SCHEDULER] Stack trace:`, queryError.stack);
+      return; // Salir temprano si hay error en la consulta
+    }
 
     if (reminders.length === 0) {
       const duration = Date.now() - startTime;
@@ -96,7 +111,24 @@ const processReminders = async (): Promise<void> => {
 
     for (const reminder of reminders) {
       try {
-        const shouldSend = await shouldSendReminder(reminder);
+        // Validar que el recordatorio tenga los campos necesarios
+        if (!reminder.id || !reminder.to || !reminder.body) {
+          console.warn(`[SCHEDULER] ⚠️  Recordatorio ${reminder.id} tiene campos inválidos, saltando...`);
+          continue;
+        }
+
+        let shouldSend: boolean;
+        try {
+          shouldSend = await shouldSendReminder(reminder);
+        } catch (validationError: any) {
+          console.error(
+            `[SCHEDULER] ❌ Error validando recordatorio ${reminder.id}:`,
+            validationError.message
+          );
+          console.error(`[SCHEDULER] Stack trace:`, validationError.stack);
+          errorCount++;
+          continue; // Continuar con el siguiente recordatorio
+        }
 
         if (shouldSend) {
           console.log(
@@ -116,30 +148,47 @@ const processReminders = async (): Promise<void> => {
               });
 
               // Actualizar lastRunAt
-              await prisma.reminder.update({
-                where: { id: reminder.id },
-                data: { lastRunAt: new Date() },
-              });
+              try {
+                await prisma.reminder.update({
+                  where: { id: reminder.id },
+                  data: { lastRunAt: new Date() },
+                });
+              } catch (updateError: any) {
+                console.error(
+                  `[SCHEDULER] ❌ Error actualizando lastRunAt para ${reminder.id}:`,
+                  updateError.message
+                );
+                // Continuar aunque falle la actualización de lastRunAt
+              }
 
               // Si es "once", desactivar después de enviar
               if (reminder.scheduleType === "once") {
-                await prisma.reminder.update({
-                  where: { id: reminder.id },
-                  data: { isActive: false },
-                });
-                console.log(`[SCHEDULER] ✅ Recordatorio 'once' ${reminder.id} enviado y desactivado`);
+                try {
+                  await prisma.reminder.update({
+                    where: { id: reminder.id },
+                    data: { isActive: false },
+                  });
+                  console.log(`[SCHEDULER] ✅ Recordatorio 'once' ${reminder.id} enviado y desactivado`);
+                } catch (deactivateError: any) {
+                  console.error(
+                    `[SCHEDULER] ❌ Error desactivando recordatorio ${reminder.id}:`,
+                    deactivateError.message
+                  );
+                  // Continuar aunque falle la desactivación
+                }
               } else {
                 console.log(`[SCHEDULER] ✅ Recordatorio ${reminder.id} enviado exitosamente`);
               }
 
               sent = true;
               sentCount++;
-            } catch (error: any) {
+            } catch (sendError: any) {
               attempts++;
               console.error(
                 `[SCHEDULER] ❌ Error enviando recordatorio ${reminder.id} (intento ${attempts}/${maxAttempts}):`,
-                error.message
+                sendError.message
               );
+              console.error(`[SCHEDULER] Stack trace:`, sendError.stack);
 
               if (attempts < maxAttempts) {
                 // Backoff exponencial: 2s, 4s, 8s
@@ -160,6 +209,8 @@ const processReminders = async (): Promise<void> => {
       } catch (error: any) {
         errorCount++;
         console.error(`[SCHEDULER] ❌ Error procesando recordatorio ${reminder.id}:`, error.message);
+        console.error(`[SCHEDULER] Stack trace:`, error.stack);
+        // Continuar con el siguiente recordatorio en lugar de fallar completamente
       }
     }
 
@@ -169,7 +220,9 @@ const processReminders = async (): Promise<void> => {
     );
   } catch (error: any) {
     console.error(`[SCHEDULER] ❌ Error crítico procesando recordatorios:`, error.message);
+    console.error(`[SCHEDULER] Tipo de error:`, error.constructor.name);
     console.error(`[SCHEDULER] Stack trace:`, error.stack);
+    // No relanzar el error para que el scheduler continúe ejecutándose
   }
 };
 
