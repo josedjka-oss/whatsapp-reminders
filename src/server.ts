@@ -80,7 +80,7 @@ app.get("/", (req, res) => {
 });
 
 // Inicializar base de datos y servidor
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || "3000", 10);
 let server: any = null;
 let schedulerStarted = false;
 
