@@ -95,8 +95,26 @@ const processReminders = async (): Promise<void> => {
       });
       console.log(`[SCHEDULER] Encontrados ${reminders.length} recordatorios activos`);
     } catch (queryError: any) {
-      console.error(`[SCHEDULER] ❌ Error consultando recordatorios:`, queryError.message);
-      console.error(`[SCHEDULER] Stack trace:`, queryError.stack);
+      console.error(`[SCHEDULER] ❌ Error consultando recordatorios:`);
+      console.error(`[SCHEDULER] Mensaje:`, queryError.message || "Sin mensaje de error");
+      console.error(`[SCHEDULER] Código:`, queryError.code || "Sin código de error");
+      console.error(`[SCHEDULER] Tipo:`, queryError.constructor.name || "Desconocido");
+      console.error(`[SCHEDULER] Stack trace:`, queryError.stack || "Sin stack trace");
+      
+      // Mensajes específicos para errores comunes
+      if (queryError.code === "42P01") {
+        console.error(`[SCHEDULER] ⚠️  ERROR: La tabla "Reminder" no existe. Las migraciones no se ejecutaron.`);
+        console.error(`[SCHEDULER] ⚠️  SOLUCIÓN: Ejecuta 'npx prisma migrate deploy' en Render.`);
+      } else if (queryError.code === "3D000") {
+        console.error(`[SCHEDULER] ⚠️  ERROR: La base de datos no existe.`);
+      } else if (queryError.code === "28P01") {
+        console.error(`[SCHEDULER] ⚠️  ERROR: Credenciales de base de datos incorrectas.`);
+      } else if (queryError.message?.includes("P1001")) {
+        console.error(`[SCHEDULER] ⚠️  ERROR: No se puede conectar a la base de datos. Verifica DATABASE_URL.`);
+      } else if (queryError.message?.includes("P2021")) {
+        console.error(`[SCHEDULER] ⚠️  ERROR: La tabla no existe. Ejecuta las migraciones.`);
+      }
+      
       return; // Salir temprano si hay error en la consulta
     }
 
