@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Reminder {
+  id          String    @id @default(uuid())
+  to          String    // Número destino en formato whatsapp:+...
+  body        String    // Mensaje del recordatorio
+  scheduleType String   // once, daily, monthly
+  sendAt      DateTime? // Para scheduleType "once"
+  hour        Int?      // Hora del día (0-23)
+  minute      Int?      // Minuto (0-59)
+  dayOfMonth  Int?      // Día del mes (1-31) para monthly
+  timezone    String    @default("America/Bogota")
+  isActive    Boolean   @default(true)
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isActive, scheduleType])
+  @@index([lastRunAt])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  direction String   // inbound, outbound
+  from      String   // Número remitente
+  to        String   // Número destino
+  body      String   // Contenido del mensaje
+  twilioSid String?  // Message SID de Twilio
+  createdAt DateTime @default(now())
+
+  @@index([direction])
+  @@index([from])
+  @@index([to])
+  @@index([createdAt])
+}
+
