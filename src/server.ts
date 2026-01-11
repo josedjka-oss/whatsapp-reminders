@@ -10,6 +10,8 @@ import { startScheduler } from "./services/scheduler";
 // Cargar variables de entorno
 dotenv.config();
 
+// Trigger redeploy - Webhook configurado
+
 const app = express();
 const prisma = new PrismaClient();
 
