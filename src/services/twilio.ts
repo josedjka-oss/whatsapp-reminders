@@ -7,15 +7,28 @@ const prisma = new PrismaClient();
  * Obtiene las credenciales de Twilio y valida que estén presentes
  */
 const getTwilioCredentials = () => {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
-  const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+  const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+  const fromNumber = process.env.TWILIO_WHATSAPP_FROM?.trim();
+  const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER?.trim();
+
+  // Logging para debugging (sin exponer el token completo)
+  console.log(`[TWILIO] Verificando credenciales...`);
+  console.log(`[TWILIO] TWILIO_ACCOUNT_SID: ${accountSid ? `${accountSid.substring(0, 10)}...` : 'NO CONFIGURADO'}`);
+  console.log(`[TWILIO] TWILIO_AUTH_TOKEN: ${authToken ? `${authToken.substring(0, 10)}...` : 'NO CONFIGURADO'}`);
+  console.log(`[TWILIO] TWILIO_WHATSAPP_FROM: ${fromNumber || 'NO CONFIGURADO'}`);
+  console.log(`[TWILIO] MY_WHATSAPP_NUMBER: ${myWhatsAppNumber || 'NO CONFIGURADO'}`);
 
   if (!accountSid || !authToken || !fromNumber) {
+    const missing = [];
+    if (!accountSid) missing.push('TWILIO_ACCOUNT_SID');
+    if (!authToken) missing.push('TWILIO_AUTH_TOKEN');
+    if (!fromNumber) missing.push('TWILIO_WHATSAPP_FROM');
+    
     throw new Error(
-      "Se requieren credenciales de Twilio en las variables de entorno. " +
-      "Asegúrate de configurar: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM"
+      `Se requieren credenciales de Twilio en las variables de entorno. ` +
+      `Faltantes: ${missing.join(', ')}. ` +
+      `Asegúrate de configurarlas en Render Dashboard > Environment Variables.`
     );
   }
 
@@ -51,6 +64,9 @@ export const sendWhatsAppMessage = async ({
     // Obtener credenciales y cliente de Twilio
     const credentials = getTwilioCredentials();
     const client = getTwilioClient();
+
+    console.log(`[TWILIO] Enviando mensaje de ${credentials.fromNumber} a ${to}`);
+    console.log(`[TWILIO] Mensaje: ${body.substring(0, 50)}${body.length > 50 ? '...' : ''}`);
 
     const message = await client.messages.create({
       from: credentials.fromNumber,
