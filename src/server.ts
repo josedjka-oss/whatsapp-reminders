@@ -1,10 +1,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
 import { PrismaClient } from "@prisma/client";
 import remindersRouter from "./routes/reminders";
 import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
+import aiRouter from "./routes/ai";
 import { startScheduler } from "./services/scheduler";
 
 // Cargar variables de entorno
@@ -62,19 +64,40 @@ app.get("/health", async (req, res) => {
   return res.status(statusCode).json(checks);
 });
 
-// Rutas
+// Rutas API
 app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
+app.use("/api/ai", aiRouter);
 app.use("/webhooks", webhooksRouter);
 
-// Ruta raíz
+// Servir Next.js estático (si existe)
+const nextjsBuildPath = path.join(__dirname, "../.next");
+const nextjsStaticPath = path.join(__dirname, "../.next/static");
+
+if (process.env.NODE_ENV === "production") {
+  try {
+    // Servir archivos estáticos de Next.js
+    app.use("/_next/static", express.static(nextjsStaticPath));
+    
+    // Para desarrollo, Next.js se sirve por separado
+    // En producción, Next.js se compila y Express sirve los archivos
+  } catch (error) {
+    console.warn("[INIT] Next.js build no encontrado, sirviendo solo API");
+  }
+}
+
+// Ruta raíz - redirigir a /chat si Next.js está disponible
 app.get("/", (req, res) => {
+  // Si Next.js está disponible, redirigir a /chat
+  // Si no, mostrar info de API
   res.json({
     message: "WhatsApp Reminders API",
     version: "1.0.0",
+    chat: "/chat",
     endpoints: {
       reminders: "/api/reminders",
       messages: "/api/messages",
+      ai: "/api/ai",
       webhooks: "/webhooks/twilio/whatsapp",
       health: "/health",
     },

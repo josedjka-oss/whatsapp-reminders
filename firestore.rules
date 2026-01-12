@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scheduledMessages/{messageId} {
+      // Permitir lectura y escritura a todos (en producción, agregar autenticación)
+      allow read, write: if true;
+    }
+  }
+}
