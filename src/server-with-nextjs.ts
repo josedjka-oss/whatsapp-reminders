@@ -24,7 +24,9 @@ const isDev = process.env.NODE_ENV !== "production";
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
 // Inicializar Next.js
-const nextApp = next({ dev: isDev, dir: path.join(__dirname) });
+// __dirname apunta a dist/ después de compilar, necesitamos la raíz del proyecto
+const projectRoot = path.join(__dirname, "..");
+const nextApp = next({ dev: isDev, dir: projectRoot });
 const nextHandler = nextApp.getRequestHandler();
 
 const app = express();
