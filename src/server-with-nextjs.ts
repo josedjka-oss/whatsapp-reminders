@@ -10,11 +10,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { PrismaClient } from "@prisma/client";
-import remindersRouter from "./src/routes/reminders";
-import webhooksRouter from "./src/routes/webhooks";
-import messagesRouter from "./src/routes/messages";
-import aiRouter from "./src/routes/ai";
-import { startScheduler } from "./src/services/scheduler";
+import remindersRouter from "./routes/reminders";
+import webhooksRouter from "./routes/webhooks";
+import messagesRouter from "./routes/messages";
+import aiRouter from "./routes/ai";
+import { startScheduler } from "./services/scheduler";
 import next from "next";
 
 // Cargar variables de entorno
