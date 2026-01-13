@@ -90,7 +90,7 @@
 - **Key**: `TWILIO_ACCOUNT_SID`
 - **Value**: Tu Account SID de Twilio
   - Formato: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-  - Ejemplo: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+  - Ejemplo: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (reemplaza con tu Account SID real)
   - Obtener en: https://console.twilio.com/ (Dashboard principal)
 - **Secret**: NO (pero es sensible, ten cuidado de no compartirla)
 - Haz clic en **"Add"** o **"Save"**

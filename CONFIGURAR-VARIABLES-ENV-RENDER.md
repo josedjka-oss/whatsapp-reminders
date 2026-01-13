@@ -25,7 +25,7 @@ Error: Se requieren credenciales de Twilio en las variables de entorno
 #### **1. TWILIO_ACCOUNT_SID**
 - **Tipo:** String
 - **Valor:** Tu Account SID de Twilio (comienza con `AC...`)
-- **Ejemplo:** `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+- **Ejemplo:** `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (reemplaza con tu Account SID real)
 - **¿Dónde obtenerla?** → Twilio Console → Account Info → Account SID
 
 #### **2. TWILIO_AUTH_TOKEN** ⚠️ SECRETO
@@ -76,7 +76,7 @@ Error: Se requieren credenciales de Twilio en las variables de entorno
 2. **Haz clic en "Add Environment Variable"**
 3. **Ingresa:**
    - **Key:** `TWILIO_ACCOUNT_SID`
-   - **Value:** `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+   - **Value:** `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (reemplaza con tu Account SID real)
 4. **Repite para cada variable**
 
 ### **Opción 2: Desde Settings**
