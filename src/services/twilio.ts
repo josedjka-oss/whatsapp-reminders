@@ -111,11 +111,12 @@ export const sendWhatsAppMessage = async ({
 };
 
 /**
- * Reenvía un mensaje recibido a tu WhatsApp personal
+ * Reenvía un mensaje recibido a tu WhatsApp personal (con imágenes si hay)
  */
 export const forwardToMyWhatsApp = async (
   from: string,
-  body: string
+  body: string,
+  mediaUrls: string[] = []
 ): Promise<void> => {
   const credentials = getTwilioCredentials();
   const myWhatsAppNumber = credentials.myWhatsAppNumber;
@@ -125,14 +126,48 @@ export const forwardToMyWhatsApp = async (
     return;
   }
 
-  const forwardedBody = `📩 Respuesta de ${from}:\n\n${body}`;
+  const client = getTwilioClient();
+  const forwardedBody = `📩 Respuesta de ${from}:\n\n${body || ""}`;
 
   try {
-    await sendWhatsAppMessage({
-      to: myWhatsAppNumber,
-      body: forwardedBody,
-    });
-    console.log(`Mensaje reenviado a ${myWhatsAppNumber}`);
+    // Si hay imágenes, enviar con media
+    if (mediaUrls.length > 0) {
+      console.log(`[TWILIO] Reenviando mensaje con ${mediaUrls.length} imagen(es)`);
+      
+      // Construir mensaje con media
+      const messageData: any = {
+        from: credentials.fromNumber,
+        to: myWhatsAppNumber,
+        body: forwardedBody,
+      };
+
+      // Agregar URLs de media (Twilio permite hasta 10 archivos)
+      mediaUrls.slice(0, 10).forEach((url, index) => {
+        messageData[`MediaUrl${index}`] = url;
+      });
+
+      const message = await client.messages.create(messageData);
+      
+      // Guardar mensaje en base de datos
+      await prisma.message.create({
+        data: {
+          direction: "outbound",
+          from: credentials.fromNumber,
+          to: myWhatsAppNumber,
+          body: forwardedBody,
+          twilioSid: message.sid,
+        },
+      });
+
+      console.log(`[TWILIO] Mensaje con imágenes reenviado. SID: ${message.sid}`);
+    } else {
+      // Solo texto, usar función normal
+      await sendWhatsAppMessage({
+        to: myWhatsAppNumber,
+        body: forwardedBody,
+      });
+      console.log(`[TWILIO] Mensaje reenviado a ${myWhatsAppNumber}`);
+    }
   } catch (error: any) {
     console.error("Error reenviando mensaje:", error);
     throw error;

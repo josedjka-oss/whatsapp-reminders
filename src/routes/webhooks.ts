@@ -71,6 +71,25 @@ router.post("/twilio/whatsapp", async (req: Request, res: Response) => {
     const to = req.body.To || req.body.to || req.body.ToNumber;
     const body = req.body.Body || req.body.body || req.body.MessageBody || "";
     const messageSid = req.body.MessageSid || req.body.messageSid || req.body.SmsMessageSid;
+    
+    // Extraer información de multimedia
+    const numMedia = parseInt(req.body.NumMedia || req.body.numMedia || "0", 10);
+    const mediaUrls: string[] = [];
+    const mediaTypes: string[] = [];
+    
+    if (numMedia > 0) {
+      for (let i = 0; i < numMedia; i++) {
+        const mediaUrl = req.body[`MediaUrl${i}`] || req.body[`mediaUrl${i}`];
+        const mediaType = req.body[`MediaContentType${i}`] || req.body[`mediaContentType${i}`] || "unknown";
+        if (mediaUrl) {
+          mediaUrls.push(mediaUrl);
+          mediaTypes.push(mediaType);
+        }
+      }
+      console.log(`[WEBHOOK] 📷 Mensaje con ${numMedia} archivo(s) multimedia`);
+      console.log(`[WEBHOOK] 📷 URLs: ${mediaUrls.join(", ")}`);
+      console.log(`[WEBHOOK] 📷 Tipos: ${mediaTypes.join(", ")}`);
+    }
 
     if (!from || !to) {
       console.error(`[WEBHOOK] ❌ Datos incompletos: from=${from}, to=${to}`);
@@ -88,7 +107,7 @@ router.post("/twilio/whatsapp", async (req: Request, res: Response) => {
           direction: "inbound",
           from: from,
           to: to,
-          body: body || "(sin mensaje)",
+          body: body || (numMedia > 0 ? `[${numMedia} archivo(s) multimedia]` : "(sin mensaje)"),
           twilioSid: messageSid || null,
         },
       });
@@ -98,10 +117,10 @@ router.post("/twilio/whatsapp", async (req: Request, res: Response) => {
       // Continuar aunque falle la DB para no bloquear el webhook
     }
 
-    // Reenviar a tu WhatsApp personal
-    if (body && body.trim() !== "") {
+    // Reenviar a tu WhatsApp personal (con imágenes si hay)
+    if ((body && body.trim() !== "") || numMedia > 0) {
       try {
-        await forwardToMyWhatsApp(from, body);
+        await forwardToMyWhatsApp(from, body, mediaUrls);
         console.log(`[WEBHOOK] ✅ Mensaje reenviado a WhatsApp personal`);
       } catch (error: any) {
         console.error(`[WEBHOOK] ❌ Error reenviando mensaje:`, error.message);
