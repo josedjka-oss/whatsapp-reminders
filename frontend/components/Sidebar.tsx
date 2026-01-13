@@ -25,6 +25,12 @@ export const Sidebar = ({ onNewChat }: SidebarProps) => {
         >
           📅 Crear Recordatorio
         </button>
+        <button
+          onClick={() => router.push("/reminders")}
+          className="w-full bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 transition-colors font-medium"
+        >
+          📋 Ver Recordatorios
+        </button>
       </div>
 
       {/* Chat List */}
