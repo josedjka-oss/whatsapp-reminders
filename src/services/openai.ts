@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import { prisma } from "../db";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { addHours, addDays, format } from "date-fns";
+import { sendWhatsAppMessage } from "./twilio";
+import { sendWhatsAppMessage } from "./twilio";
 
 // Verificar que OPENAI_API_KEY esté configurado
 if (!process.env.OPENAI_API_KEY) {
@@ -237,6 +239,28 @@ export const getOpenAITools = () => [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "send_message",
+      description: "Envía un mensaje de WhatsApp inmediatamente (sin programar). Usa esta función cuando el usuario quiera enviar un mensaje ahora mismo, sin crear un recordatorio.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: {
+            type: "string",
+            description:
+              "Número de WhatsApp en formato 'whatsapp:+57xxxxxxxxxx'. Si el usuario menciona un nombre, primero intenta resolverlo usando los contactos disponibles.",
+          },
+          body: {
+            type: "string",
+            description: "El texto del mensaje que se enviará inmediatamente",
+          },
+        },
+        required: ["to", "body"],
+      },
+    },
+  },
 ];
 
 /**
@@ -256,9 +280,22 @@ export const executeTool = async (
         if (contactPhone) {
           to = contactPhone;
         } else {
-          throw new Error(`No se encontró el contacto "${to}". ¿Qué número de WhatsApp tiene ${to}?`);
+          // Si no es un contacto y no tiene formato whatsapp:+, intentar formatearlo
+          if (!to.startsWith("+")) {
+            to = `+${to}`;
+          }
+          if (!to.startsWith("whatsapp:")) {
+            to = `whatsapp:${to}`;
+          }
         }
       }
+      
+      // Validar formato final
+      if (!to.match(/^whatsapp:\+\d{10,15}$/)) {
+        throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+573001234567'`);
+      }
+      
+      console.log(`[OPENAI] create_reminder - Número formateado: ${to}`);
 
       // Procesar fecha para scheduleType="once"
       let sendAt: string | null = args.sendAt || null;
