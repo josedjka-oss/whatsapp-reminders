@@ -150,6 +150,15 @@ const processReminders = async (): Promise<void> => {
           console.log(
             `[SCHEDULER] ⏰ Recordatorio ${reminder.id} debe enviarse ahora (tipo: ${reminder.scheduleType}, destino: ${reminder.to})`
           );
+          console.log(`[SCHEDULER] 📝 Mensaje: "${reminder.body.substring(0, 50)}${reminder.body.length > 50 ? '...' : ''}"`);
+          console.log(`[SCHEDULER] 📞 Verificando formato del número: ${reminder.to}`);
+
+          // Validar formato del número antes de enviar
+          if (!reminder.to.match(/^whatsapp:\+\d{10,15}$/)) {
+            console.error(`[SCHEDULER] ❌ Formato de número inválido: ${reminder.to}. Debe ser 'whatsapp:+573001234567'`);
+            errorCount++;
+            continue;
+          }
 
           // Intentar enviar con reintentos
           let sent = false;
@@ -158,10 +167,12 @@ const processReminders = async (): Promise<void> => {
 
           while (!sent && attempts < maxAttempts) {
             try {
-              await sendWhatsAppMessage({
+              const messageSid = await sendWhatsAppMessage({
                 to: reminder.to,
                 body: reminder.body,
               });
+              
+              console.log(`[SCHEDULER] ✅ Mensaje enviado. SID: ${messageSid}`);
 
               // Actualizar lastRunAt
               try {

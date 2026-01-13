@@ -66,11 +66,24 @@ export const sendWhatsAppMessage = async ({
     console.log(`[TWILIO] Enviando mensaje de ${credentials.fromNumber} a ${to}`);
     console.log(`[TWILIO] Mensaje: ${body.substring(0, 50)}${body.length > 50 ? '...' : ''}`);
 
+    console.log(`[TWILIO] Formato del número destino: ${to}`);
+    console.log(`[TWILIO] Número origen: ${credentials.fromNumber}`);
+    
     const message = await client.messages.create({
       from: credentials.fromNumber,
       to: to,
       body: body,
     });
+
+    console.log(`[TWILIO] ✅ Mensaje creado en Twilio. SID: ${message.sid}`);
+    console.log(`[TWILIO] Estado del mensaje: ${message.status}`);
+    console.log(`[TWILIO] Número destino final: ${message.to}`);
+    console.log(`[TWILIO] Número origen final: ${message.from}`);
+    
+    // Verificar si hay errores en el mensaje
+    if (message.errorCode || message.errorMessage) {
+      console.error(`[TWILIO] ⚠️  Error en mensaje: ${message.errorCode} - ${message.errorMessage}`);
+    }
 
     // Guardar mensaje en base de datos
     await prisma.message.create({
@@ -83,7 +96,13 @@ export const sendWhatsAppMessage = async ({
       },
     });
 
-    console.log(`Mensaje enviado exitosamente. SID: ${message.sid}`);
+    console.log(`[TWILIO] ✅ Mensaje guardado en base de datos. SID: ${message.sid}`);
+    
+    // Si el estado no es "queued" o "sent", loggear advertencia
+    if (message.status !== "queued" && message.status !== "sent" && message.status !== "delivered") {
+      console.warn(`[TWILIO] ⚠️  Estado inusual del mensaje: ${message.status}`);
+    }
+    
     return message.sid;
   } catch (error: any) {
     console.error("Error enviando mensaje de WhatsApp:", error);
