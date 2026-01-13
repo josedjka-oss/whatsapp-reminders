@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { prisma } from "../db";
-import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { addHours, addDays, format } from "date-fns";
 
 // Verificar que OPENAI_API_KEY esté configurado
@@ -31,12 +31,12 @@ const isValidISO = (str: string): boolean => {
  */
 const parseRelativeTime = (text: string): Date | null => {
   const now = new Date();
-  const zonedNow = utcToZonedTime(now, DEFAULT_TIMEZONE);
+  const zonedNow = toZonedTime(now, DEFAULT_TIMEZONE);
 
   // "mañana" = día siguiente a la hora por defecto
   if (text.toLowerCase().includes("mañana")) {
     const tomorrow = addDays(zonedNow, 1);
-    return zonedTimeToUtc(
+    return fromZonedTime(
       new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), DEFAULT_REMINDER_HOUR, DEFAULT_REMINDER_MINUTE),
       DEFAULT_TIMEZONE
     );
@@ -46,23 +46,23 @@ const parseRelativeTime = (text: string): Date | null => {
   if (text.toLowerCase().includes("hoy")) {
     const today = new Date(zonedNow.getFullYear(), zonedNow.getMonth(), zonedNow.getDate(), DEFAULT_REMINDER_HOUR, DEFAULT_REMINDER_MINUTE);
     if (today < zonedNow) {
-      return zonedTimeToUtc(addDays(today, 1), DEFAULT_TIMEZONE);
+      return fromZonedTime(addDays(today, 1), DEFAULT_TIMEZONE);
     }
-    return zonedTimeToUtc(today, DEFAULT_TIMEZONE);
+    return fromZonedTime(today, DEFAULT_TIMEZONE);
   }
 
   // "en X horas"
   const hoursMatch = text.match(/en\s+(\d+)\s+horas?/i);
   if (hoursMatch) {
     const hours = parseInt(hoursMatch[1]);
-    return zonedTimeToUtc(addHours(zonedNow, hours), DEFAULT_TIMEZONE);
+    return fromZonedTime(addHours(zonedNow, hours), DEFAULT_TIMEZONE);
   }
 
   // "en X días"
   const daysMatch = text.match(/en\s+(\d+)\s+días?/i);
   if (daysMatch) {
     const days = parseInt(daysMatch[1]);
-    return zonedTimeToUtc(addDays(zonedNow, days), DEFAULT_TIMEZONE);
+    return fromZonedTime(addDays(zonedNow, days), DEFAULT_TIMEZONE);
   }
 
   return null;
@@ -274,23 +274,23 @@ export const executeTool = async (
           if (relativeDate) {
             // Si hay hora en el texto, combinarla con la fecha relativa
             if (timeInfo) {
-              const zonedDate = utcToZonedTime(relativeDate, DEFAULT_TIMEZONE);
+              const zonedDate = toZonedTime(relativeDate, DEFAULT_TIMEZONE);
               zonedDate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
-              sendAt = zonedTimeToUtc(zonedDate, DEFAULT_TIMEZONE).toISOString();
+              sendAt = fromZonedTime(zonedDate, DEFAULT_TIMEZONE).toISOString();
             } else {
               sendAt = relativeDate.toISOString();
             }
           } else if (timeInfo) {
             // Solo hay hora, usar hoy + hora
             const now = new Date();
-            const zonedBase = utcToZonedTime(now, DEFAULT_TIMEZONE);
+            const zonedBase = toZonedTime(now, DEFAULT_TIMEZONE);
             const candidate = new Date(zonedBase);
             candidate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
             // Si la hora ya pasó hoy, usar mañana
             if (candidate <= zonedBase) {
               candidate.setDate(candidate.getDate() + 1);
             }
-            sendAt = zonedTimeToUtc(candidate, DEFAULT_TIMEZONE).toISOString();
+            sendAt = fromZonedTime(candidate, DEFAULT_TIMEZONE).toISOString();
           } else {
             throw new Error("Necesito la fecha y hora para un recordatorio único. ¿Cuándo quieres enviarlo? (ej: 'mañana a las 5pm', 'hoy a las 10am')");
           }
@@ -341,7 +341,7 @@ export const executeTool = async (
       let scheduleText = "";
       if (args.scheduleType === "once" && sendAt) {
         const utcDate = new Date(sendAt);
-        const zonedDate = utcToZonedTime(utcDate, DEFAULT_TIMEZONE);
+        const zonedDate = toZonedTime(utcDate, DEFAULT_TIMEZONE);
         scheduleText = `el ${format(zonedDate, "dd/MM/yyyy")} a las ${format(zonedDate, "HH:mm")}`;
       } else if (args.scheduleType === "daily") {
         scheduleText = `todos los días a las ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
@@ -414,7 +414,7 @@ export const executeTool = async (
           reminder = matchingReminders[0];
         } else {
           // Múltiples coincidencias - guardar opciones en DB y devolver needs_clarification
-          const options = matchingReminders.slice(0, 5).map((r, idx) => ({
+          const options = matchingReminders.slice(0, 5).map((r: any, idx: number) => ({
             index: idx + 1,
             id: r.id,
             body: r.body,
@@ -446,7 +446,7 @@ export const executeTool = async (
           }
 
           const remindersList = options
-            .map((opt) => `${opt.index}. "${opt.body.substring(0, 50)}" para ${opt.to}`)
+            .map((opt: any) => `${opt.index}. "${opt.body.substring(0, 50)}" para ${opt.to}`)
             .join("\n");
           
           return {
@@ -483,10 +483,10 @@ export const executeTool = async (
 
       // Formatear lista con números, ID corto y resumen
       const remindersList = reminders
-        .map((r, idx) => {
+        .map((r: any, idx: number) => {
           let schedule = "";
           if (r.scheduleType === "once" && r.sendAt) {
-            const zonedDate = utcToZonedTime(new Date(r.sendAt), DEFAULT_TIMEZONE);
+            const zonedDate = toZonedTime(new Date(r.sendAt), DEFAULT_TIMEZONE);
             schedule = `el ${format(zonedDate, "dd/MM/yyyy")} a las ${format(zonedDate, "HH:mm")}`;
           } else if (r.scheduleType === "daily") {
             schedule = `diariamente a las ${String(r.hour).padStart(2, "0")}:${String(r.minute).padStart(2, "0")}`;
@@ -639,10 +639,10 @@ export const processUserMessage = async (text: string): Promise<{ reply: string;
   });
 
   const remindersContext = activeReminders
-    .map((r) => {
+    .map((r: any) => {
       let schedule = "";
       if (r.scheduleType === "once" && r.sendAt) {
-        const zonedDate = utcToZonedTime(new Date(r.sendAt), DEFAULT_TIMEZONE);
+        const zonedDate = toZonedTime(new Date(r.sendAt), DEFAULT_TIMEZONE);
         schedule = `una vez el ${format(zonedDate, "dd/MM/yyyy HH:mm")}`;
       } else if (r.scheduleType === "daily") {
         schedule = `diariamente a las ${String(r.hour).padStart(2, "0")}:${String(r.minute).padStart(2, "0")}`;

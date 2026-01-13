@@ -1,24 +1,13 @@
 import { Router, Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import OpenAI from "openai";
-import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { addHours, addDays, parse } from "date-fns";
 import rateLimit from "express-rate-limit";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 const prisma = new PrismaClient();
-
-// Rate limiting para /api/ai
-const aiRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 50, // máximo 50 requests por ventana
-  message: "Demasiadas solicitudes, intenta de nuevo más tarde",
-});
-
-// Aplicar autenticación y rate limiting
-router.use(requireAuth);
-router.use(aiRateLimit);
 
 // Rate limiting para /api/ai
 const aiRateLimit = rateLimit({
@@ -59,12 +48,12 @@ const resolveContact = async (name: string): Promise<string | null> => {
  */
 const parseRelativeTime = (text: string): Date | null => {
   const now = new Date();
-  const zonedNow = utcToZonedTime(now, DEFAULT_TIMEZONE);
+  const zonedNow = toZonedTime(now, DEFAULT_TIMEZONE);
 
   // "mañana" = día siguiente a las 9am
   if (text.toLowerCase().includes("mañana")) {
     const tomorrow = addDays(zonedNow, 1);
-    return zonedTimeToUtc(
+    return fromZonedTime(
       new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 9, 0),
       DEFAULT_TIMEZONE
     );
@@ -74,23 +63,23 @@ const parseRelativeTime = (text: string): Date | null => {
   if (text.toLowerCase().includes("hoy")) {
     const today = new Date(zonedNow.getFullYear(), zonedNow.getMonth(), zonedNow.getDate(), 9, 0);
     if (today < zonedNow) {
-      return zonedTimeToUtc(addDays(today, 1), DEFAULT_TIMEZONE);
+      return fromZonedTime(addDays(today, 1), DEFAULT_TIMEZONE);
     }
-    return zonedTimeToUtc(today, DEFAULT_TIMEZONE);
+    return fromZonedTime(today, DEFAULT_TIMEZONE);
   }
 
   // "en X horas"
   const hoursMatch = text.match(/en\s+(\d+)\s+horas?/i);
   if (hoursMatch) {
     const hours = parseInt(hoursMatch[1]);
-    return zonedTimeToUtc(addHours(zonedNow, hours), DEFAULT_TIMEZONE);
+    return fromZonedTime(addHours(zonedNow, hours), DEFAULT_TIMEZONE);
   }
 
   // "en X días"
   const daysMatch = text.match(/en\s+(\d+)\s+días?/i);
   if (daysMatch) {
     const days = parseInt(daysMatch[1]);
-    return zonedTimeToUtc(addDays(zonedNow, days), DEFAULT_TIMEZONE);
+    return fromZonedTime(addDays(zonedNow, days), DEFAULT_TIMEZONE);
   }
 
   return null;
