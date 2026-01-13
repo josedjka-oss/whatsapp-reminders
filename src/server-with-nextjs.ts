@@ -9,7 +9,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./db";
 import remindersRouter from "./routes/reminders";
 import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
@@ -30,7 +30,6 @@ const nextApp = next({ dev: isDev, dir: projectRoot });
 const nextHandler = nextApp.getRequestHandler();
 
 const app = express();
-const prisma = new PrismaClient();
 
 // Middlewares
 app.use(cors());

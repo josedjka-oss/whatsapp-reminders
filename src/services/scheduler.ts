@@ -1,10 +1,8 @@
 import cron from "node-cron";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../db";
 import { sendWhatsAppMessage } from "./twilio";
 import { formatInTimeZone } from "date-fns-tz";
 import { isBefore, addMinutes } from "date-fns";
-
-const prisma = new PrismaClient();
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 

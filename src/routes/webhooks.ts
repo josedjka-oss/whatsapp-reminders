@@ -1,10 +1,9 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../db";
 import { validateTwilioSignature } from "../utils/validation";
 import { forwardToMyWhatsApp } from "../services/twilio";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 /**
  * Webhook de Twilio para recibir mensajes entrantes

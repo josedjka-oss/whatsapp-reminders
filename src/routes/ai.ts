@@ -1,13 +1,12 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import OpenAI from "openai";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { addHours, addDays, parse } from "date-fns";
 import rateLimit from "express-rate-limit";
 import { requireAuth } from "../middleware/auth";
+import { prisma } from "../db";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Rate limiting para /api/ai
 const aiRateLimit = rateLimit({

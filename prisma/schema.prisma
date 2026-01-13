@@ -55,3 +55,15 @@ model Contact {
   @@index([name])
 }
 
+model AiPending {
+  id        String   @id @default(uuid())
+  userId    String   @default("default") // Por ahora solo 1 usuario
+  type      String   // "cancel_reminder", etc.
+  options   Json     // Array de opciones: [{id, body, to, ...}]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+

@@ -1,7 +1,5 @@
 import twilio from "twilio";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../db";
 
 /**
  * Obtiene las credenciales de Twilio y valida que estén presentes
