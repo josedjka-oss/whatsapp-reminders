@@ -88,13 +88,14 @@ app.get("/", (req, res) => {
     message: "WhatsApp Reminders API",
     version: "1.0.0",
     chat: "/chat",
-    endpoints: {
-      reminders: "/api/reminders",
-      messages: "/api/messages",
-      ai: "/api/ai",
-      webhooks: "/webhooks/twilio/whatsapp",
-      health: "/health",
-    },
+      endpoints: {
+        reminders: "/api/reminders",
+        messages: "/api/messages",
+        ai: "/api/ai",
+        twilioStatus: "/api/twilio-status",
+        webhooks: "/webhooks/twilio/whatsapp",
+        health: "/health",
+      },
   });
 });
 
