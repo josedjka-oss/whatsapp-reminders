@@ -14,7 +14,7 @@
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "render-build": "npm install --include=dev && npx prisma generate && npx prisma db push --skip-generate && npm run build",
-    "render-start": "NODE_ENV=production node dist/server-with-nextjs.js",
+    "render-start": "NODE_ENV=production node dist/server.js",
     "start:with-nextjs": "NODE_ENV=production node dist/server-with-nextjs.js",
     "start:integrated": "NODE_ENV=production node dist/server-with-nextjs.js"
   },

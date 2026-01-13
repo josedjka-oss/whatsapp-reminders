@@ -23,46 +23,53 @@ export async function POST(request: NextRequest) {
     const backendUrl = process.env.NEXT_PUBLIC_API_URL;
     const adminPassword = process.env.ADMIN_PASSWORD;
 
+    console.log("[CHAT PROXY] Configuración:", {
+      hasBackendUrl: !!backendUrl,
+      backendUrl: backendUrl?.substring(0, 30) + "...",
+      hasAdminPassword: !!adminPassword,
+    });
+
     if (!backendUrl) {
       console.error("[CHAT PROXY] NEXT_PUBLIC_API_URL no configurado");
       return NextResponse.json(
         {
           error: "Configuración del servidor incompleta",
-          reply: "Lo siento, el servicio no está configurado correctamente.",
+          reply: "Lo siento, NEXT_PUBLIC_API_URL no está configurado. Por favor, crea un archivo .env.local con NEXT_PUBLIC_API_URL=https://whatsapp-reminders-mzex.onrender.com",
         },
         { status: 500 }
       );
     }
 
-    if (!adminPassword) {
-      console.error("[CHAT PROXY] ADMIN_PASSWORD no configurado");
-      return NextResponse.json(
-        {
-          error: "Configuración de seguridad incompleta",
-          reply: "Lo siento, el servicio no está configurado correctamente.",
-        },
-        { status: 500 }
-      );
+    // ADMIN_PASSWORD es opcional: si no existe, no se envía autenticación
+    // Esto permite modo "solo personal" sin autenticación
+
+    // Preparar headers (solo incluir auth si ADMIN_PASSWORD está configurado)
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (adminPassword) {
+      headers["x-admin-password"] = adminPassword;
+      headers["Authorization"] = `Bearer ${adminPassword}`;
     }
 
-    // Llamar al backend con autenticación
+    // Llamar al backend (con o sin autenticación según configuración)
+    console.log("[CHAT PROXY] Llamando a:", `${backendUrl}/api/ai`);
+    console.log("[CHAT PROXY] Headers:", Object.keys(headers));
+    
     const response = await fetch(`${backendUrl}/api/ai`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-password": adminPassword, // Usar header personalizado
-        // También enviar Authorization Bearer por compatibilidad
-        Authorization: `Bearer ${adminPassword}`,
-      },
+      headers,
       body: JSON.stringify({ text }),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error("[CHAT PROXY] Error del backend:", response.status, errorData);
       return NextResponse.json(
         {
-          error: errorData.error || "Error del servidor",
-          reply: errorData.reply || "Lo siento, hubo un error al procesar tu solicitud.",
+          error: errorData.error || `Error del servidor (${response.status})`,
+          reply: errorData.reply || errorData.message || `Lo siento, hubo un error al procesar tu solicitud (${response.status}).`,
           actions: errorData.actions,
         },
         { status: response.status }
@@ -73,10 +80,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error("[CHAT PROXY] Error:", error);
+    console.error("[CHAT PROXY] Stack:", error.stack);
     return NextResponse.json(
       {
         error: "Error procesando la solicitud",
-        reply: "Lo siento, hubo un error inesperado. Por favor, intenta de nuevo.",
+        reply: `Lo siento, hubo un error inesperado: ${error.message || "Error desconocido"}. Por favor, verifica la configuración del servidor.`,
         actions: [
           {
             type: "error",
