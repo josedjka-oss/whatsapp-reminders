@@ -82,5 +82,5 @@ Después del redespliegue:
 ## 🔗 URLs Finales
 
 - **Backend API (Render):** `https://whatsapp-reminders-mzex.onrender.com/api/ai`
-- **Frontend (Vercel):** `https://tu-proyecto.vercel.app/chat`
+- **Frontend (Vercel):** `https://whatsapp-reminders.vercel.app/chat`
 - **Health Check (Render):** `https://whatsapp-reminders-mzex.onrender.com/health`

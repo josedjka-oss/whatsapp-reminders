@@ -101,7 +101,7 @@ Una vez completado, Vercel te dará una URL como:
 
 ### 6.3. Probar el Chat
 
-1. Visita: `https://tu-proyecto.vercel.app/chat`
+1. Visita: `https://whatsapp-reminders.vercel.app/chat`
 2. Deberías ver la interfaz tipo WhatsApp Web
 3. Escribe un mensaje como: "Recuérdame mañana a las 5 pm pagar la luz"
 4. Deberías ver la respuesta del asistente
@@ -113,7 +113,7 @@ Una vez completado, Vercel te dará una URL como:
 ### 1. Probar el Proxy
 
 ```bash
-curl -X POST https://tu-proyecto.vercel.app/api/chat \
+curl -X POST https://whatsapp-reminders.vercel.app/api/chat \
   -H "Content-Type: application/json" \
   -d '{"text": "Hola"}'
 ```
@@ -156,7 +156,7 @@ En Vercel Dashboard → Settings → Environment Variables, verifica que:
 
 ### Error: "Cannot GET /"
 - **Causa:** Estás visitando la raíz, no `/chat`
-- **Solución:** Visita `https://tu-proyecto.vercel.app/chat`
+- **Solución:** Visita `https://whatsapp-reminders.vercel.app/chat`
 
 ---
 
@@ -164,7 +164,7 @@ En Vercel Dashboard → Settings → Environment Variables, verifica que:
 
 Después del despliegue:
 
-- **Frontend (Vercel):** `https://tu-proyecto.vercel.app/chat`
+- **Frontend (Vercel):** `https://whatsapp-reminders.vercel.app/chat`
 - **Backend API (Render):** `https://whatsapp-reminders-mzex.onrender.com/api/ai`
 - **Health Check (Render):** `https://whatsapp-reminders-mzex.onrender.com/health`
 

@@ -38,13 +38,13 @@ Después de los cambios:
 ## 🧪 Probar
 
 ### URL Raíz
-- `https://tu-proyecto.vercel.app/` → Debe redirigir a `/chat`
+- `https://whatsapp-reminders.vercel.app/` → Debe redirigir a `/chat`
 
 ### URL Chat
-- `https://tu-proyecto.vercel.app/chat` → Debe mostrar el chat
+- `https://whatsapp-reminders.vercel.app/chat` → Debe mostrar el chat
 
 ### API Proxy
-- `https://tu-proyecto.vercel.app/api/chat` → Debe responder (POST)
+- `https://whatsapp-reminders.vercel.app/api/chat` → Debe responder (POST)
 
 ## 🔍 Troubleshooting Adicional
 

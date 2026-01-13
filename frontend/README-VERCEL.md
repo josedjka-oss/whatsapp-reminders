@@ -87,4 +87,5 @@ Vercel detectará automáticamente Next.js, pero verifica:
 
 - **Backend (Render):** https://whatsapp-reminders-mzex.onrender.com
 - **Frontend (Vercel):** Tu URL de Vercel
-- **Chat:** `https://tu-proyecto.vercel.app/chat`
+- **Chat:** `https://whatsapp-reminders.vercel.app/chat`
+- **Formulario de Recordatorios:** `https://whatsapp-reminders.vercel.app/reminders/new`

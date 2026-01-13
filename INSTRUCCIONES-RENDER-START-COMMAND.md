@@ -102,7 +102,7 @@ curl -X POST https://whatsapp-reminders-mzex.onrender.com/api/ai \
 - **Start Command:** `NODE_ENV=production node dist/server.js`
 
 ### Vercel (Frontend)
-- **URL:** `https://tu-proyecto.vercel.app`
+- **URL:** `https://whatsapp-reminders.vercel.app`
 - **Función:** Frontend Next.js con `/chat`
 - **Comunicación:** Frontend → Proxy `/api/chat` (Vercel) → Backend `/api/ai` (Render)
 
@@ -110,7 +110,7 @@ curl -X POST https://whatsapp-reminders-mzex.onrender.com/api/ai \
 
 ## 🔄 Flujo Completo
 
-1. Usuario visita: `https://tu-proyecto.vercel.app/chat`
+1. Usuario visita: `https://whatsapp-reminders.vercel.app/chat`
 2. Usuario escribe mensaje
 3. Frontend llama: `POST /api/chat` (proxy en Vercel)
 4. Proxy llama: `POST https://whatsapp-reminders-mzex.onrender.com/api/ai` (backend en Render)

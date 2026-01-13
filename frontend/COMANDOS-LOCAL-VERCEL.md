@@ -116,7 +116,7 @@ vercel --prod
 ## ✅ Verificar Despliegue
 
 1. **Visitar la URL de Vercel:**
-   - Ejemplo: `https://tu-proyecto.vercel.app/chat`
+   - Ejemplo: `https://whatsapp-reminders.vercel.app/chat`
 
 2. **Probar la conexión:**
    - Escribe un mensaje como: "Recuérdame mañana a las 5 pm pagar la luz"
@@ -124,7 +124,7 @@ vercel --prod
 
 3. **Probar con curl:**
    ```bash
-   curl -X POST https://tu-proyecto.vercel.app/api/chat \
+   curl -X POST https://whatsapp-reminders.vercel.app/api/chat \
      -H "Content-Type: application/json" \
      -d '{"text": "Hola"}'
    ```
