@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only server-with-nextjs.ts",
-    "build": "prisma generate && tsc",
+    "build": "npx prisma generate && tsc",
     "start": "node dist/server-with-nextjs.js",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
@@ -13,7 +13,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "render-build": "npm ci --include=dev && npx prisma generate && npx prisma db push --skip-generate && tsc",
+    "render-build": "npm ci --include=dev && npx prisma generate && npx prisma db push --skip-generate && npm run build",
     "render-start": "NODE_ENV=production node dist/server-with-nextjs.js",
     "start:with-nextjs": "NODE_ENV=production node dist/server-with-nextjs.js",
     "start:integrated": "NODE_ENV=production node dist/server-with-nextjs.js"
