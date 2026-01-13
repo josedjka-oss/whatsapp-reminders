@@ -15,9 +15,15 @@ Aplicación personal para enviar recordatorios automáticos por WhatsApp usando 
 
 **La aplicación está lista para producción 24/7.**
 
-Para desplegar en Render.com o Railway.app, sigue la guía completa en:
+### Arquitectura Separada
 
-📖 **[DEPLOY-PRODUCCION.md](./DEPLOY-PRODUCCION.md)**
+- **Backend (Render):** Express + Prisma + PostgreSQL + Scheduler + Twilio
+- **Frontend (Vercel):** Next.js + React + Tailwind CSS
+
+### Guías de Despliegue
+
+📖 **[README-DEPLOY-VERCEL-RENDER.md](./README-DEPLOY-VERCEL-RENDER.md)** - Despliegue completo  
+📖 **[README-OPENAI-INTEGRATION.md](./README-OPENAI-INTEGRATION.md)** - Configuración OpenAI y Chat
 
 ### Características de Producción:
 - ✅ Funciona 24/7 sin intervención
@@ -356,6 +362,35 @@ curl http://localhost:3000/api/messages?limit=10
 | createdAt | DateTime | Fecha de creación |
 
 ## 🧪 Pruebas
+
+### Prueba Rápida: TTL AiPending
+
+1. **Crear múltiples recordatorios similares:**
+   ```
+   "Recuérdame pagar la luz mañana a las 5pm"
+   "Recuérdame pagar el agua mañana a las 5pm"
+   "Recuérdame pagar el gas mañana a las 5pm"
+   ```
+
+2. **Intentar cancelar (debe mostrar lista):**
+   ```
+   "Cancela recordatorio de pagar"
+   ```
+   - Debe mostrar lista numerada (1, 2, 3...)
+
+3. **Responder con número (antes de TTL):**
+   ```
+   2
+   ```
+   - Debe cancelar el recordatorio #2 inmediatamente
+
+4. **Probar expiración (opcional):**
+   - Cambiar `AI_PENDING_TTL_MINUTES=1` en Render
+   - Repetir pasos 1-2
+   - Esperar 1 minuto
+   - Responder `2` → Debe decir que expiró
+
+**Ver `PRUEBA-MANUAL-TTL.md` para pruebas detalladas.**
 
 ### Crear un recordatorio de prueba (una vez)
 
