@@ -7,6 +7,7 @@ import remindersRouter from "./routes/reminders";
 import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
 import aiRouter from "./routes/ai";
+import twilioStatusRouter from "./routes/twilio-status";
 import { startScheduler } from "./services/scheduler";
 
 // Cargar variables de entorno
@@ -67,6 +68,7 @@ app.get("/health", async (req, res) => {
 app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/twilio-status", twilioStatusRouter);
 app.use("/webhooks", webhooksRouter);
 
 // Servir Next.js estático (solo en producción, si existe)
