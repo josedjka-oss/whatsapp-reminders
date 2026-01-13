@@ -2,28 +2,30 @@ import { Request, Response, NextFunction } from "express";
 
 /**
  * Middleware de autenticación simple con password
- * Por ahora usa password fijo: 2023
+ * Acepta ADMIN_PASSWORD o AI_ADMIN_KEY desde variables de entorno
+ * También acepta header x-admin-password para compatibilidad con proxy de Vercel
  */
 export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  // Password fijo por ahora: 2023
-  const validPassword = process.env.ADMIN_PASSWORD || "2023";
+  const validPassword = process.env.ADMIN_PASSWORD || process.env.AI_ADMIN_KEY || "2023";
+
+  // Verificar header x-admin-password (usado por proxy de Vercel)
+  const xAdminPassword = req.headers["x-admin-password"] as string;
+  if (xAdminPassword && xAdminPassword === validPassword) {
+    return next();
+  }
 
   // Verificar header Authorization
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({
-      error: "No autorizado",
-      message: "Se requiere autenticación",
-    });
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    if (token === validPassword) {
+      return next();
+    }
   }
 
-  const token = authHeader.substring(7);
-  if (token !== validPassword) {
-    return res.status(401).json({
-      error: "No autorizado",
-      message: "Password incorrecto",
-    });
-  }
-
-  next();
+  // Si no hay autenticación válida
+  return res.status(401).json({
+    error: "No autorizado",
+    message: "Se requiere autenticación",
+  });
 };
