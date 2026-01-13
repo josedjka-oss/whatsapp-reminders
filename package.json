@@ -13,10 +13,9 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "render-build": "npm install --include=dev && prisma generate && tsc && npx prisma db push --skip-generate && next build",
+    "render-build": "npm install --include=dev && prisma generate && tsc && npx prisma db push --skip-generate",
     "render-start": "NODE_ENV=production node dist/server-with-nextjs.js",
-    "render-start": "NODE_ENV=production node dist/server-with-nextjs.js",
-    "start:with-nextjs": "NODE_ENV=production node dist/server-with-nextjs.js"
+    "start:with-nextjs": "NODE_ENV=production node dist/server-with-nextjs.js",
     "start:integrated": "NODE_ENV=production node dist/server-with-nextjs.js"
   },
   "engines": {
