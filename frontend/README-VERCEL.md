@@ -46,7 +46,7 @@ Vercel detectará automáticamente Next.js, pero verifica:
 
 1. Haz clic en **"Deploy"**
 2. Espera a que termine el build
-3. Vercel te dará una URL como: `https://tu-proyecto.vercel.app`
+3. Vercel te dará una URL como: `https://whatsapp-reminders.vercel.app`
 
 ---
 
