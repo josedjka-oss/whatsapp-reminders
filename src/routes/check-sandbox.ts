@@ -56,7 +56,7 @@ router.get("/", async (req: Request, res: Response) => {
 
       // Contar errores de Sandbox (21608 = Unverified number)
       sandboxErrors = messages.filter(
-        (msg) => msg.errorCode === "21608" || msg.errorCode === 21608
+        (msg) => String(msg.errorCode) === "21608" || msg.errorCode === 21608
       ).length;
     } catch (error: any) {
       console.error("[CHECK-SANDBOX] Error obteniendo mensajes:", error);

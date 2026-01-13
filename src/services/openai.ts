@@ -3,7 +3,6 @@ import { prisma } from "../db";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { addHours, addDays, format } from "date-fns";
 import { sendWhatsAppMessage } from "./twilio";
-import { sendWhatsAppMessage } from "./twilio";
 
 // Verificar que OPENAI_API_KEY esté configurado
 if (!process.env.OPENAI_API_KEY) {
