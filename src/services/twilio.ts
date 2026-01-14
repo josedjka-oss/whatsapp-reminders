@@ -136,17 +136,32 @@ const downloadTwilioMedia = async (mediaUrl: string, accountSid: string, authTok
 };
 
 /**
- * Crea una URL pública temporal usando un servicio público
- * Alternativa: convertir a base64 data URL (limitado por tamaño)
+ * Sube una imagen a imgbb.com y obtiene una URL pública
+ * imgbb.com es un servicio gratuito de hosting de imágenes
  */
-const createPublicImageUrl = async (imageBuffer: Buffer, contentType: string): Promise<string> => {
-  // Opción 1: Usar imgbb.com (servicio gratuito, sin API key requerida para uso básico)
-  // Opción 2: Usar base64 data URL (limitado, pero funciona)
+const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<string> => {
+  // imgbb.com API (gratuito, sin API key para uso básico, pero limitado)
+  // Alternativa: usar otro servicio o implementar nuestro propio servidor de archivos
   
-  // Por ahora, usamos base64 data URL como solución temporal
-  // Nota: Esto puede fallar con imágenes muy grandes
-  const base64 = imageBuffer.toString("base64");
-  return `data:${contentType};base64,${base64}`;
+  try {
+    // Convertir imagen a base64
+    const base64 = imageBuffer.toString("base64");
+    
+    // Usar imgbb API (requiere API key, pero hay versión sin key)
+    // Por ahora, intentamos con un servicio público simple
+    // Nota: Esto es temporal, idealmente deberíamos tener nuestro propio servicio
+    
+    // Intentar usar la API de imgbb (puede requerir API key)
+    const formData = new FormData();
+    const blob = new Blob([imageBuffer], { type: contentType });
+    formData.append("image", blob);
+    
+    // Por ahora, retornamos null para indicar que necesitamos otra solución
+    // La mejor opción es usar las URLs de Twilio con autenticación embebida en la URL
+    throw new Error("Subir a servicio público no implementado aún");
+  } catch (error) {
+    throw error;
+  }
 };
 
 /**
@@ -201,12 +216,16 @@ export const forwardToMyWhatsApp = async (
           
           console.log(`[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`);
           
-          // Intentar usar la URL original de Twilio primero (puede funcionar si es la misma cuenta)
-          // Si no funciona, necesitaremos una URL pública
+          // Intentar crear URL pública subiendo la imagen a un servicio temporal
+          // Por ahora, usamos la URL original de Twilio con autenticación embebida
+          // Formato: https://AccountSid:AuthToken@api.twilio.com/...
           
-          // Por ahora, intentamos usar la URL original
-          // Si Twilio no puede acceder, necesitaremos subir a un servicio público
-          processedUrls.push(mediaUrl);
+          // Crear URL con autenticación embebida
+          const urlParts = new URL(mediaUrl);
+          const publicUrl = `${urlParts.protocol}//${credentials.accountSid}:${credentials.authToken}@${urlParts.host}${urlParts.pathname}${urlParts.search}`;
+          
+          console.log(`[TWILIO] URL con autenticación embebida creada`);
+          processedUrls.push(publicUrl);
           
           console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada: ${mediaUrl.substring(0, 80)}...`);
         } catch (downloadError: any) {
