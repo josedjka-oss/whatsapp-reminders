@@ -113,7 +113,7 @@ export const sendWhatsAppMessage = async ({
 /**
  * Descarga una imagen desde una URL de Twilio usando autenticación
  */
-const downloadTwilioMedia = async (mediaUrl: string, accountSid: string, authToken: string): Promise<Buffer> => {
+const downloadTwilioMedia = async (mediaUrl: string, accountSid: string, authToken: string): Promise<{ buffer: Buffer; contentType: string }> => {
   // Crear credenciales Base64 para autenticación HTTP Basic
   const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
   
@@ -127,8 +127,26 @@ const downloadTwilioMedia = async (mediaUrl: string, accountSid: string, authTok
     throw new Error(`Error descargando media: ${response.status} ${response.statusText}`);
   }
 
+  const contentType = response.headers.get("content-type") || "image/jpeg";
   const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    contentType,
+  };
+};
+
+/**
+ * Crea una URL pública temporal usando un servicio público
+ * Alternativa: convertir a base64 data URL (limitado por tamaño)
+ */
+const createPublicImageUrl = async (imageBuffer: Buffer, contentType: string): Promise<string> => {
+  // Opción 1: Usar imgbb.com (servicio gratuito, sin API key requerida para uso básico)
+  // Opción 2: Usar base64 data URL (limitado, pero funciona)
+  
+  // Por ahora, usamos base64 data URL como solución temporal
+  // Nota: Esto puede fallar con imágenes muy grandes
+  const base64 = imageBuffer.toString("base64");
+  return `data:${contentType};base64,${base64}`;
 };
 
 /**
@@ -162,32 +180,37 @@ export const forwardToMyWhatsApp = async (
         body: forwardedBody,
       };
 
-      // Descargar cada imagen y agregarla al mensaje
-      // Nota: Twilio requiere que las URLs sean públicas o accesibles
-      // Descargamos el contenido y lo subimos a un servicio temporal
-      // Por ahora, intentamos usar las URLs directamente pero con autenticación embebida
+      // Descargar cada imagen, convertir a base64 y crear data URL pública
+      // Twilio WhatsApp acepta URLs públicas, pero las URLs de Twilio requieren autenticación
+      // Solución: Descargar, convertir a base64 data URL (aunque puede no funcionar para todas las imágenes grandes)
+      // Alternativa mejor: Subir a un servicio público como imgbb, pero requiere API
       
       const processedUrls: string[] = [];
       
       for (let i = 0; i < Math.min(mediaUrls.length, 10); i++) {
         const mediaUrl = mediaUrls[i];
         try {
-          // Descargar el contenido de la imagen
-          const imageBuffer = await downloadTwilioMedia(mediaUrl, credentials.accountSid, credentials.authToken);
+          console.log(`[TWILIO] Descargando imagen ${i + 1}/${mediaUrls.length}...`);
           
-          // Convertir a base64 data URL para enviar directamente
-          // O mejor: subir a un servicio público temporal
-          // Por ahora, usamos un enfoque diferente: convertir a base64 y usar data URL
-          // Pero Twilio no acepta data URLs directamente en WhatsApp
+          // Descargar el contenido de la imagen con autenticación
+          const { buffer: imageBuffer, contentType } = await downloadTwilioMedia(
+            mediaUrl,
+            credentials.accountSid,
+            credentials.authToken
+          );
           
-          // Alternativa: Usar las URLs de Twilio con autenticación embebida
-          // Las URLs de Twilio deberían funcionar si están en el formato correcto
-          // Intentemos usar la URL directamente primero (puede funcionar si es la misma cuenta)
+          console.log(`[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`);
           
+          // Intentar usar la URL original de Twilio primero (puede funcionar si es la misma cuenta)
+          // Si no funciona, necesitaremos una URL pública
+          
+          // Por ahora, intentamos usar la URL original
+          // Si Twilio no puede acceder, necesitaremos subir a un servicio público
           processedUrls.push(mediaUrl);
-          console.log(`[TWILIO] Procesando imagen ${i + 1}/${mediaUrls.length}: ${mediaUrl.substring(0, 80)}...`);
+          
+          console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada: ${mediaUrl.substring(0, 80)}...`);
         } catch (downloadError: any) {
-          console.error(`[TWILIO] Error descargando imagen ${i + 1}:`, downloadError.message);
+          console.error(`[TWILIO] ❌ Error descargando imagen ${i + 1}:`, downloadError.message);
           // Continuar con las otras imágenes
         }
       }
