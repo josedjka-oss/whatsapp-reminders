@@ -216,16 +216,11 @@ export const forwardToMyWhatsApp = async (
           
           console.log(`[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`);
           
-          // Intentar crear URL pública subiendo la imagen a un servicio temporal
-          // Por ahora, usamos la URL original de Twilio con autenticación embebida
-          // Formato: https://AccountSid:AuthToken@api.twilio.com/...
-          
-          // Crear URL con autenticación embebida
-          const urlParts = new URL(mediaUrl);
-          const publicUrl = `${urlParts.protocol}//${credentials.accountSid}:${credentials.authToken}@${urlParts.host}${urlParts.pathname}${urlParts.search}`;
-          
-          console.log(`[TWILIO] URL con autenticación embebida creada`);
-          processedUrls.push(publicUrl);
+          // Usar la URL original de Twilio directamente
+          // Twilio debería poder acceder a URLs de la misma cuenta sin autenticación adicional
+          // Si esto no funciona, necesitaremos subir a un servicio público
+          processedUrls.push(mediaUrl);
+          console.log(`[TWILIO] Usando URL original de Twilio: ${mediaUrl.substring(0, 80)}...`);
           
           console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada: ${mediaUrl.substring(0, 80)}...`);
         } catch (downloadError: any) {
