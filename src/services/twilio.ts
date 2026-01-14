@@ -205,26 +205,16 @@ export const forwardToMyWhatsApp = async (
       for (let i = 0; i < Math.min(mediaUrls.length, 10); i++) {
         const mediaUrl = mediaUrls[i];
         try {
-          console.log(`[TWILIO] Descargando imagen ${i + 1}/${mediaUrls.length}...`);
+          console.log(`[TWILIO] Procesando imagen ${i + 1}/${mediaUrls.length}...`);
+          console.log(`[TWILIO] URL: ${mediaUrl}`);
           
-          // Descargar el contenido de la imagen con autenticación
-          const { buffer: imageBuffer, contentType } = await downloadTwilioMedia(
-            mediaUrl,
-            credentials.accountSid,
-            credentials.authToken
-          );
-          
-          console.log(`[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`);
-          
-          // Usar la URL original de Twilio directamente
-          // Twilio debería poder acceder a URLs de la misma cuenta sin autenticación adicional
-          // Si esto no funciona, necesitaremos subir a un servicio público
+          // Las URLs de Twilio Media de la misma cuenta deberían funcionar directamente
+          // Si la URL es de la misma cuenta, Twilio puede acceder sin autenticación adicional
+          // Usar la URL tal cual como viene de Twilio
           processedUrls.push(mediaUrl);
-          console.log(`[TWILIO] Usando URL original de Twilio: ${mediaUrl.substring(0, 80)}...`);
-          
-          console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada: ${mediaUrl.substring(0, 80)}...`);
-        } catch (downloadError: any) {
-          console.error(`[TWILIO] ❌ Error descargando imagen ${i + 1}:`, downloadError.message);
+          console.log(`[TWILIO] ✅ Imagen ${i + 1} agregada: ${mediaUrl.substring(0, 80)}...`);
+        } catch (error: any) {
+          console.error(`[TWILIO] ❌ Error procesando imagen ${i + 1}:`, error.message);
           // Continuar con las otras imágenes
         }
       }
