@@ -242,7 +242,7 @@ export const getOpenAITools = () => [
     type: "function" as const,
     function: {
       name: "send_message",
-      description: "Envía un mensaje de WhatsApp inmediatamente (sin programar). Usa esta función cuando el usuario quiera enviar un mensaje ahora mismo, sin crear un recordatorio.",
+      description: "Envía un mensaje de WhatsApp inmediatamente (sin programar) usando el template aprobado. Usa esta función cuando el usuario quiera enviar un mensaje ahora mismo, sin crear un recordatorio.",
       parameters: {
         type: "object",
         properties: {
@@ -253,7 +253,7 @@ export const getOpenAITools = () => [
           },
           body: {
             type: "string",
-            description: "El texto del mensaje que se enviará inmediatamente",
+            description: "El texto del mensaje que se enviará inmediatamente (este texto irá en {{1}} del template aprobado)",
           },
         },
         required: ["to", "body"],
@@ -359,10 +359,14 @@ export const executeTool = async (
         throw new Error("Necesito el día del mes para un recordatorio mensual. ¿Qué día del mes? (1-31)");
       }
 
+      // Construir reminderText (el texto que va en {{1}} del template)
+      const reminderText = args.body;
+
+      // Guardar recordatorio en base de datos
       const reminder = await prisma.reminder.create({
         data: {
           to,
-          body: args.body,
+          body: reminderText,
           scheduleType: args.scheduleType,
           sendAt: args.scheduleType === "once" && sendAt ? new Date(sendAt) : null,
           hour: args.scheduleType !== "once" ? hour : null,
@@ -372,6 +376,11 @@ export const executeTool = async (
           isActive: true,
         },
       });
+
+      console.log(`[OPENAI] ✅ Recordatorio creado en DB. ID: ${reminder.id}`);
+      console.log(`[OPENAI] 📝 ReminderText: ${reminderText}`);
+      console.log(`[OPENAI] 📞 Destino: ${to}`);
+      console.log(`[OPENAI] 📅 Tipo: ${args.scheduleType}`);
 
       // Formatear scheduleText con timezone correcto
       let scheduleText = "";
@@ -387,7 +396,7 @@ export const executeTool = async (
 
       return {
         type: "created",
-        summary: `Recordatorio creado: Enviaré "${args.body}" a ${to} ${scheduleText}`,
+        summary: `Recordatorio creado: Enviaré "${reminderText}" a ${to} ${scheduleText}`,
       };
     }
 
@@ -536,6 +545,50 @@ export const executeTool = async (
       return {
         type: "listed",
         summary: `Tienes ${reminders.length} recordatorio(s) activo(s):\n\n${remindersList}`,
+      };
+    }
+
+    if (functionName === "send_message") {
+      // Resolver contacto si es necesario
+      let to = args.to;
+      if (!to.startsWith("whatsapp:+")) {
+        const contactPhone = await resolveContact(to);
+        if (contactPhone) {
+          to = contactPhone;
+        } else {
+          // Si no es un contacto y no tiene formato whatsapp:+, intentar formatearlo
+          if (!to.startsWith("+")) {
+            to = `+${to}`;
+          }
+          if (!to.startsWith("whatsapp:")) {
+            to = `whatsapp:${to}`;
+          }
+        }
+      }
+      
+      // Validar formato final
+      if (!to.match(/^whatsapp:\+\d{10,15}$/)) {
+        throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+57XXXXXXXXXX'`);
+      }
+      
+      console.log(`[OPENAI] send_message - Número formateado: ${to}`);
+      console.log(`[OPENAI] 📤 Enviando mensaje inmediatamente...`);
+      console.log(`[OPENAI] 📝 Mensaje: ${args.body.substring(0, 50)}${args.body.length > 50 ? '...' : ''}`);
+
+      // Construir reminderText (el texto que va en {{1}} del template)
+      const reminderText = args.body;
+
+      // Enviar inmediatamente usando template
+      const messageSid = await sendWhatsAppMessage({
+        to: to,
+        reminderText: reminderText,
+      });
+
+      console.log(`[OPENAI] ✅ Mensaje enviado. SID: ${messageSid}`);
+
+      return {
+        type: "sent",
+        summary: `Mensaje enviado a ${to}: "${reminderText}"`,
       };
     }
 

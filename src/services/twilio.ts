@@ -2,12 +2,17 @@ import twilio from "twilio";
 import { prisma } from "../db";
 
 /**
+ * Template ID aprobado de WhatsApp Business
+ */
+const WHATSAPP_TEMPLATE_CONTENT_SID = "HX1d443af43266b056998367e82a4441bd";
+
+/**
  * Obtiene las credenciales de Twilio y valida que estén presentes
  */
 const getTwilioCredentials = () => {
   const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
   const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
-  const fromNumber = process.env.TWILIO_WHATSAPP_FROM?.trim();
+  const fromNumber = process.env.TWILIO_WHATSAPP_FROM?.trim() || "whatsapp:+573043577875";
   const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER?.trim();
 
   // Logging para debugging (sin exponer el token completo)
@@ -17,11 +22,10 @@ const getTwilioCredentials = () => {
   console.log(`[TWILIO] TWILIO_WHATSAPP_FROM: ${fromNumber || 'NO CONFIGURADO'}`);
   console.log(`[TWILIO] MY_WHATSAPP_NUMBER: ${myWhatsAppNumber || 'NO CONFIGURADO'}`);
 
-  if (!accountSid || !authToken || !fromNumber) {
+  if (!accountSid || !authToken) {
     const missing = [];
     if (!accountSid) missing.push('TWILIO_ACCOUNT_SID');
     if (!authToken) missing.push('TWILIO_AUTH_TOKEN');
-    if (!fromNumber) missing.push('TWILIO_WHATSAPP_FROM');
     
     throw new Error(
       `Se requieren credenciales de Twilio en las variables de entorno. ` +
@@ -48,31 +52,40 @@ const getTwilioClient = () => {
 
 interface SendMessageParams {
   to: string;
-  body: string;
+  reminderText: string; // El texto que va en {{1}} del template
 }
 
 /**
- * Envía un mensaje de WhatsApp usando Twilio
+ * Envía un mensaje de WhatsApp usando Twilio con template aprobado
  */
 export const sendWhatsAppMessage = async ({
   to,
-  body,
+  reminderText,
 }: SendMessageParams): Promise<string> => {
   try {
     // Obtener credenciales y cliente de Twilio
     const credentials = getTwilioCredentials();
     const client = getTwilioClient();
 
-    console.log(`[TWILIO] Enviando mensaje de ${credentials.fromNumber} a ${to}`);
-    console.log(`[TWILIO] Mensaje: ${body.substring(0, 50)}${body.length > 50 ? '...' : ''}`);
+    console.log(`[TWILIO] 📤 Enviando mensaje usando WhatsApp Business API`);
+    console.log(`[TWILIO] From: ${credentials.fromNumber}`);
+    console.log(`[TWILIO] To: ${to}`);
+    console.log(`[TWILIO] Template ContentSid: ${WHATSAPP_TEMPLATE_CONTENT_SID}`);
+    console.log(`[TWILIO] ReminderText: ${reminderText.substring(0, 50)}${reminderText.length > 50 ? '...' : ''}`);
 
-    console.log(`[TWILIO] Formato del número destino: ${to}`);
-    console.log(`[TWILIO] Número origen: ${credentials.fromNumber}`);
-    
+    // Validar formato del número
+    if (!to.match(/^whatsapp:\+\d{10,15}$/)) {
+      throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+57XXXXXXXXXX'`);
+    }
+
+    // Enviar usando template aprobado
     const message = await client.messages.create({
       from: credentials.fromNumber,
       to: to,
-      body: body,
+      contentSid: WHATSAPP_TEMPLATE_CONTENT_SID,
+      contentVariables: JSON.stringify({
+        "1": reminderText
+      })
     });
 
     console.log(`[TWILIO] ✅ Mensaje creado en Twilio. SID: ${message.sid}`);
@@ -82,7 +95,8 @@ export const sendWhatsAppMessage = async ({
     
     // Verificar si hay errores en el mensaje
     if (message.errorCode || message.errorMessage) {
-      console.error(`[TWILIO] ⚠️  Error en mensaje: ${message.errorCode} - ${message.errorMessage}`);
+      console.error(`[TWILIO] ❌ Error en mensaje: ${message.errorCode} - ${message.errorMessage}`);
+      throw new Error(`Twilio error: ${message.errorCode} - ${message.errorMessage}`);
     }
 
     // Guardar mensaje en base de datos
@@ -91,7 +105,7 @@ export const sendWhatsAppMessage = async ({
         direction: "outbound",
         from: credentials.fromNumber,
         to: to,
-        body: body,
+        body: reminderText, // Guardar el texto del recordatorio
         twilioSid: message.sid,
       },
     });
@@ -105,7 +119,8 @@ export const sendWhatsAppMessage = async ({
     
     return message.sid;
   } catch (error: any) {
-    console.error("Error enviando mensaje de WhatsApp:", error);
+    console.error(`[TWILIO] ❌ Error enviando mensaje de WhatsApp:`, error);
+    console.error(`[TWILIO] Stack trace:`, error.stack);
     throw new Error(`Error enviando mensaje: ${error.message}`);
   }
 };
@@ -236,11 +251,11 @@ export const forwardToMyWhatsApp = async (
       });
 
       if (processedUrls.length === 0) {
-        // Si no se pudieron procesar las imágenes, enviar solo texto
+        // Si no se pudieron procesar las imágenes, enviar solo texto usando template
         console.warn(`[TWILIO] No se pudieron procesar las imágenes, enviando solo texto`);
         await sendWhatsAppMessage({
           to: myWhatsAppNumber,
-          body: forwardedBody + "\n\n[Nota: Las imágenes no pudieron ser reenviadas]",
+          reminderText: forwardedBody + "\n\n[Nota: Las imágenes no pudieron ser reenviadas]",
         });
         return;
       }
@@ -260,10 +275,10 @@ export const forwardToMyWhatsApp = async (
 
       console.log(`[TWILIO] Mensaje con ${processedUrls.length} imagen(es) reenviado. SID: ${message.sid}`);
     } else {
-      // Solo texto, usar función normal
+      // Solo texto, usar función normal con template
       await sendWhatsAppMessage({
         to: myWhatsAppNumber,
-        body: forwardedBody,
+        reminderText: forwardedBody,
       });
       console.log(`[TWILIO] Mensaje reenviado a ${myWhatsAppNumber}`);
     }

@@ -167,9 +167,15 @@ const processReminders = async (): Promise<void> => {
 
           while (!sent && attempts < maxAttempts) {
             try {
+              // Construir reminderText (el texto que va en {{1}} del template)
+              const reminderText = reminder.body;
+              
+              console.log(`[SCHEDULER] 📤 Enviando recordatorio usando WhatsApp Business API...`);
+              console.log(`[SCHEDULER] 📝 ReminderText: ${reminderText.substring(0, 50)}${reminderText.length > 50 ? '...' : ''}`);
+              
               const messageSid = await sendWhatsAppMessage({
                 to: reminder.to,
-                body: reminder.body,
+                reminderText: reminderText,
               });
               
               console.log(`[SCHEDULER] ✅ Mensaje enviado. SID: ${messageSid}`);

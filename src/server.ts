@@ -8,7 +8,7 @@ import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
 import aiRouter from "./routes/ai";
 import twilioStatusRouter from "./routes/twilio-status";
-import checkSandboxRouter from "./routes/check-sandbox";
+// import checkSandboxRouter from "./routes/check-sandbox"; // Deshabilitado: Ya no usamos Sandbox
 import { startScheduler } from "./services/scheduler";
 
 // Cargar variables de entorno
@@ -70,7 +70,7 @@ app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/twilio-status", twilioStatusRouter);
-app.use("/api/check-sandbox", checkSandboxRouter);
+// app.use("/api/check-sandbox", checkSandboxRouter); // Deshabilitado: Ya no usamos Sandbox
 app.use("/webhooks", webhooksRouter);
 
 // Servir Next.js estático (solo en producción, si existe)
@@ -95,7 +95,7 @@ app.get("/", (req, res) => {
         messages: "/api/messages",
         ai: "/api/ai",
         twilioStatus: "/api/twilio-status",
-        checkSandbox: "/api/check-sandbox",
+        // checkSandbox: "/api/check-sandbox", // Deshabilitado: Ya no usamos Sandbox
         webhooks: "/webhooks/twilio/whatsapp",
         health: "/health",
       },
