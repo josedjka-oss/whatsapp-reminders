@@ -1,8 +1,8 @@
 import cron from "node-cron";
 import { prisma } from "../db";
 import { sendWhatsAppMessage } from "./twilio";
-import { formatInTimeZone } from "date-fns-tz";
-import { isBefore, addMinutes } from "date-fns";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import { isBefore, addMinutes, differenceInSeconds } from "date-fns";
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 
@@ -11,6 +11,7 @@ const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
  */
 const shouldSendReminder = async (reminder: any): Promise<boolean> => {
   const now = new Date();
+  const reminderTimezone = reminder.timezone || APP_TIMEZONE;
 
   // Si ya se ejecutó en los últimos 60 segundos, no enviar (evitar duplicados)
   if (reminder.lastRunAt) {
@@ -23,23 +24,31 @@ const shouldSendReminder = async (reminder: any): Promise<boolean> => {
   switch (reminder.scheduleType) {
     case "once": {
       if (!reminder.sendAt) return false;
-      const sendAtDate = new Date(reminder.sendAt);
       
+      // Convertir sendAt (UTC en DB) a zona horaria del recordatorio
+      const sendAtDate = new Date(reminder.sendAt);
+      const sendAtZoned = toZonedTime(sendAtDate, reminderTimezone);
+      
+      // Convertir now (UTC) a zona horaria del recordatorio
+      const nowZoned = toZonedTime(now, reminderTimezone);
+      
+      // Comparar en la misma zona horaria
       // Verificar si ya pasó la fecha y estamos en el mismo minuto
-      // El scheduler se ejecuta cada minuto, así que verificamos si estamos en el minuto exacto
-      if (isBefore(now, sendAtDate)) {
+      if (isBefore(nowZoned, sendAtZoned)) {
         return false; // Aún no es momento
       }
       
       // Verificar si estamos en el mismo minuto (con tolerancia de 60 segundos)
-      const diffInSeconds = Math.abs((now.getTime() - sendAtDate.getTime()) / 1000);
+      // Comparar las fechas zonales, no las UTC
+      const diffInSeconds = Math.abs(differenceInSeconds(nowZoned, sendAtZoned));
       return diffInSeconds <= 60; // Dentro de 60 segundos de la fecha programada
     }
 
     case "daily": {
       if (reminder.hour === null || reminder.minute === null) return false;
-      const currentHour = parseInt(formatInTimeZone(now, reminder.timezone, "HH"));
-      const currentMinute = parseInt(formatInTimeZone(now, reminder.timezone, "mm"));
+      // Usar timezone del recordatorio o el por defecto
+      const currentHour = parseInt(formatInTimeZone(now, reminderTimezone, "HH"));
+      const currentMinute = parseInt(formatInTimeZone(now, reminderTimezone, "mm"));
       return currentHour === reminder.hour && currentMinute === reminder.minute;
     }
 
@@ -50,9 +59,10 @@ const shouldSendReminder = async (reminder: any): Promise<boolean> => {
         reminder.minute === null
       )
         return false;
-      const currentDay = parseInt(formatInTimeZone(now, reminder.timezone, "d"));
-      const currentHour = parseInt(formatInTimeZone(now, reminder.timezone, "HH"));
-      const currentMinute = parseInt(formatInTimeZone(now, reminder.timezone, "mm"));
+      // Usar timezone del recordatorio o el por defecto
+      const currentDay = parseInt(formatInTimeZone(now, reminderTimezone, "d"));
+      const currentHour = parseInt(formatInTimeZone(now, reminderTimezone, "HH"));
+      const currentMinute = parseInt(formatInTimeZone(now, reminderTimezone, "mm"));
       return (
         currentDay === reminder.dayOfMonth &&
         currentHour === reminder.hour &&
@@ -72,7 +82,8 @@ const processReminders = async (): Promise<void> => {
   const startTime = Date.now();
   try {
     const now = new Date();
-    console.log(`[SCHEDULER] ${now.toISOString()} - Verificando recordatorios activos...`);
+    const nowZoned = toZonedTime(now, APP_TIMEZONE);
+    console.log(`[SCHEDULER] ${now.toISOString()} (UTC) - ${formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd HH:mm:ss")} (${APP_TIMEZONE}) - Verificando recordatorios activos...`);
 
     // Verificar conexión a base de datos primero
     try {
