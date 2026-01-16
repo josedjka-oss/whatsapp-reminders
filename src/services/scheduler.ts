@@ -171,6 +171,26 @@ const processReminders = async (): Promise<void> => {
             continue;
           }
 
+          // Validar que el número destino no sea el mismo que el origen
+          // Obtener el número origen desde las credenciales de Twilio
+          const twilioFromNumber = process.env.TWILIO_WHATSAPP_FROM?.trim() || "whatsapp:+573043577875";
+          if (reminder.to === twilioFromNumber) {
+            console.error(`[SCHEDULER] ❌ No se puede enviar a sí mismo. El recordatorio ${reminder.id} tiene el mismo número de origen y destino: ${reminder.to}`);
+            console.error(`[SCHEDULER] ⚠️  Desactivando recordatorio para evitar errores futuros`);
+            // Desactivar el recordatorio para evitar intentos futuros
+            try {
+              await prisma.reminder.update({
+                where: { id: reminder.id },
+                data: { isActive: false },
+              });
+              console.log(`[SCHEDULER] ✅ Recordatorio ${reminder.id} desactivado`);
+            } catch (updateError: any) {
+              console.error(`[SCHEDULER] ❌ Error desactivando recordatorio:`, updateError.message);
+            }
+            errorCount++;
+            continue;
+          }
+
           // Intentar enviar con reintentos
           let sent = false;
           let attempts = 0;

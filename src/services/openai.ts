@@ -294,6 +294,12 @@ export const executeTool = async (
         throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+573001234567'`);
       }
       
+      // Validar que el número destino no sea el mismo que el origen
+      const twilioFromNumber = process.env.TWILIO_WHATSAPP_FROM?.trim() || "whatsapp:+573043577875";
+      if (to === twilioFromNumber) {
+        throw new Error(`No se puede crear un recordatorio para enviar a sí mismo. El número destino (${to}) no puede ser igual al número origen (${twilioFromNumber}). Por favor, especifica un número diferente.`);
+      }
+      
       console.log(`[OPENAI] create_reminder - Número formateado: ${to}`);
 
       // Procesar fecha para scheduleType="once"
@@ -585,6 +591,12 @@ export const executeTool = async (
       // Validar formato final
       if (!to.match(/^whatsapp:\+\d{10,15}$/)) {
         throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+57XXXXXXXXXX'`);
+      }
+      
+      // Validar que el número destino no sea el mismo que el origen
+      const twilioFromNumber = process.env.TWILIO_WHATSAPP_FROM?.trim() || "whatsapp:+573043577875";
+      if (to === twilioFromNumber) {
+        throw new Error(`No se puede enviar un mensaje a sí mismo. El número destino (${to}) no puede ser igual al número origen (${twilioFromNumber}). Por favor, especifica un número diferente.`);
       }
       
       console.log(`[OPENAI] send_message - Número formateado: ${to}`);

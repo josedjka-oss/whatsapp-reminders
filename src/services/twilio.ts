@@ -78,6 +78,11 @@ export const sendWhatsAppMessage = async ({
       throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+57XXXXXXXXXX'`);
     }
 
+    // Validar que el número destino no sea el mismo que el origen
+    if (to === credentials.fromNumber) {
+      throw new Error(`No se puede enviar un mensaje a sí mismo. El número destino (${to}) no puede ser igual al número origen (${credentials.fromNumber})`);
+    }
+
     // Enviar usando template aprobado
     const message = await client.messages.create({
       from: credentials.fromNumber,
