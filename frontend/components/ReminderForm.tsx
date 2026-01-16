@@ -72,8 +72,14 @@ export const ReminderForm = () => {
           return;
         }
 
+        // Crear fecha en zona horaria local (Bogotá)
+        // El input date devuelve fecha en formato YYYY-MM-DD (zona local)
+        // El input time devuelve hora en formato HH:MM (zona local)
         const sendAt = new Date(`${formData.date}T${formData.time}`);
-        if (sendAt <= new Date()) {
+        const nowLocal = new Date();
+        
+        // Comparar en la misma zona horaria (ambas son locales)
+        if (sendAt <= nowLocal) {
           setError("La fecha y hora deben ser futuras");
           setIsSubmitting(false);
           return;
@@ -107,7 +113,8 @@ export const ReminderForm = () => {
         const sendAt = new Date(baseDate);
         sendAt.setDate(sendAt.getDate() + 7); // 7 días desde la fecha base
 
-        if (sendAt <= new Date()) {
+        const nowLocal = new Date();
+        if (sendAt <= nowLocal) {
           setError("La fecha calculada debe ser futura");
           setIsSubmitting(false);
           return;
@@ -125,13 +132,14 @@ export const ReminderForm = () => {
         }
 
         // Calcular fecha: 2 días desde hoy a la hora especificada
-        const today = new Date();
+        const todayLocal = new Date();
         const [hour, minute] = formData.time.split(":").map(Number);
-        const sendAt = new Date(today);
+        const sendAt = new Date(todayLocal);
         sendAt.setDate(sendAt.getDate() + 2); // 2 días desde hoy
         sendAt.setHours(hour, minute, 0, 0);
 
-        if (sendAt <= new Date()) {
+        const nowLocal = new Date();
+        if (sendAt <= nowLocal) {
           setError("La fecha calculada debe ser futura");
           setIsSubmitting(false);
           return;
@@ -190,10 +198,12 @@ export const ReminderForm = () => {
     }));
   };
 
-  // Obtener fecha mínima (hoy)
-  const today = new Date().toISOString().split("T")[0];
-  // Obtener hora actual
+  // Obtener fecha mínima (hoy) en zona horaria local (Bogotá)
   const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    .toISOString()
+    .split("T")[0];
+  // Obtener hora actual en zona horaria local
   const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   return (
