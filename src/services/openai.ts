@@ -307,26 +307,42 @@ export const executeTool = async (
           const relativeDate = parseRelativeTime(originalText);
           const timeInfo = parseTime(originalText);
           
-          if (relativeDate) {
-            // Si hay hora en el texto, combinarla con la fecha relativa
-            if (timeInfo) {
-              const zonedDate = toZonedTime(relativeDate, DEFAULT_TIMEZONE);
-              zonedDate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
-              sendAt = fromZonedTime(zonedDate, DEFAULT_TIMEZONE).toISOString();
-            } else {
-              sendAt = relativeDate.toISOString();
-            }
-          } else if (timeInfo) {
-            // Solo hay hora, usar hoy + hora
+          // Si hay hora específica, construir fecha con esa hora directamente
+          if (timeInfo) {
             const now = new Date();
-            const zonedBase = toZonedTime(now, DEFAULT_TIMEZONE);
-            const candidate = new Date(zonedBase);
-            candidate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
-            // Si la hora ya pasó hoy, usar mañana
-            if (candidate <= zonedBase) {
+            const zonedNow = toZonedTime(now, DEFAULT_TIMEZONE);
+            
+            // Determinar la fecha base según si es "hoy" o "mañana"
+            let baseDate: Date;
+            const isHoy = originalText.toLowerCase().includes("hoy");
+            const isMañana = originalText.toLowerCase().includes("mañana");
+            
+            if (isMañana) {
+              baseDate = addDays(zonedNow, 1);
+            } else {
+              baseDate = new Date(zonedNow);
+            }
+            
+            // Construir fecha con la hora específica
+            const candidate = new Date(
+              baseDate.getFullYear(),
+              baseDate.getMonth(),
+              baseDate.getDate(),
+              timeInfo.hour,
+              timeInfo.minute,
+              0,
+              0
+            );
+            
+            // Si es "hoy" y la hora ya pasó, usar mañana
+            if (isHoy && candidate <= zonedNow) {
               candidate.setDate(candidate.getDate() + 1);
             }
+            
             sendAt = fromZonedTime(candidate, DEFAULT_TIMEZONE).toISOString();
+          } else if (relativeDate) {
+            // Si hay fecha relativa pero sin hora específica, usar la fecha relativa con hora por defecto
+            sendAt = relativeDate.toISOString();
           } else {
             throw new Error("Necesito la fecha y hora para un recordatorio único. ¿Cuándo quieres enviarlo? (ej: 'mañana a las 5pm', 'hoy a las 10am')");
           }
