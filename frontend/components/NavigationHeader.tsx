@@ -13,7 +13,7 @@ export const NavigationHeader = ({ title }: NavigationHeaderProps) => {
     <div className="w-full bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-4">
         <button
-          onClick={() => router.push("/reminders")}
+          onClick={() => router.push("/")}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
           aria-label="Ir al dashboard"
           title="Ir al dashboard"

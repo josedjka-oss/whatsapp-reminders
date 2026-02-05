@@ -10,7 +10,7 @@ export const Sidebar = () => {
       {/* Header */}
       <div className="p-4 border-b border-gray-300 space-y-2">
         <button
-          onClick={() => router.push("/reminders")}
+          onClick={() => router.push("/")}
           className="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors font-medium"
         >
           🏠 Dashboard
