@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { RemindersList } from "@/components/RemindersList";
+import { NavigationHeader } from "@/components/NavigationHeader";
 
 interface Reminder {
   id: string;
@@ -78,9 +79,10 @@ export default function RemindersPage() {
   const filteredReminders = getFilteredReminders();
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Recordatorios</h1>
+    <div className="min-h-screen bg-gray-50">
+      <NavigationHeader title="Recordatorios" />
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-lg p-6">
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-gray-200">
@@ -145,6 +147,7 @@ export default function RemindersPage() {
         {!loading && !error && (
           <RemindersList reminders={filteredReminders} type={activeTab} />
         )}
+        </div>
       </div>
     </div>
   );

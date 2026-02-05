@@ -6,7 +6,7 @@ import { prisma } from "./db";
 import remindersRouter from "./routes/reminders";
 import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
-import aiRouter from "./routes/ai";
+// import aiRouter from "./routes/ai"; // DESHABILITADO: Chat inteligente eliminado para evitar costos de OpenAI
 import contactsRouter from "./routes/contacts";
 import twilioStatusRouter from "./routes/twilio-status";
 import whatsappSendersRouter from "./routes/whatsapp-senders";
@@ -70,7 +70,7 @@ app.get("/health", async (req, res) => {
 // Rutas API (MANTENER TODA LA LOGICA EXISTENTE - NO MODIFICAR)
 app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
-app.use("/api/ai", aiRouter);
+// app.use("/api/ai", aiRouter); // DESHABILITADO: Chat inteligente eliminado para evitar costos de OpenAI
 app.use("/api/contacts", contactsRouter);
 app.use("/api/twilio-status", twilioStatusRouter);
 app.use("/api/whatsapp-senders", whatsappSendersRouter);
