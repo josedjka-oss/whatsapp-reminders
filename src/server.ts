@@ -10,6 +10,7 @@ import messagesRouter from "./routes/messages";
 import contactsRouter from "./routes/contacts";
 import twilioStatusRouter from "./routes/twilio-status";
 import whatsappSendersRouter from "./routes/whatsapp-senders";
+import migrateRouter from "./routes/migrate";
 // import checkSandboxRouter from "./routes/check-sandbox"; // Deshabilitado: Ya no usamos Sandbox
 import { startScheduler } from "./services/scheduler";
 
@@ -72,6 +73,7 @@ app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
 // app.use("/api/ai", aiRouter); // DESHABILITADO: Chat inteligente eliminado para evitar costos de OpenAI
 app.use("/api/contacts", contactsRouter);
+app.use("/api/migrate", migrateRouter);
 app.use("/api/twilio-status", twilioStatusRouter);
 app.use("/api/whatsapp-senders", whatsappSendersRouter);
 // app.use("/api/check-sandbox", checkSandboxRouter); // Deshabilitado: Ya no usamos Sandbox
