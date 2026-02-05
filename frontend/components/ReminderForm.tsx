@@ -41,12 +41,21 @@ export const ReminderForm = () => {
         return;
       }
 
-      // Formatear número (agregar whatsapp: si no lo tiene)
+      // Formatear número (agregar +57 automáticamente si no tiene código de país)
       let phoneNumber = formData.to.trim();
+      
+      // Remover "whatsapp:" si está presente para procesar solo el número
+      if (phoneNumber.startsWith("whatsapp:")) {
+        phoneNumber = phoneNumber.replace("whatsapp:", "");
+      }
+      
+      // Si no empieza con +, agregar +57 (Colombia)
+      if (!phoneNumber.startsWith("+")) {
+        phoneNumber = `+57${phoneNumber}`;
+      }
+      
+      // Agregar prefijo whatsapp: si no lo tiene
       if (!phoneNumber.startsWith("whatsapp:")) {
-        if (!phoneNumber.startsWith("+")) {
-          phoneNumber = `+${phoneNumber}`;
-        }
         phoneNumber = `whatsapp:${phoneNumber}`;
       }
 
@@ -223,12 +232,12 @@ export const ReminderForm = () => {
               name="to"
               value={formData.to}
               onChange={handleChange}
-              placeholder="+573001234567 o whatsapp:+573001234567"
+              placeholder="3001234567 (se agregará +57 automáticamente)"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               required
             />
             <p className="mt-1 text-xs text-gray-500">
-              Incluye el código de país (ej: +57 para Colombia)
+              Solo escribe el número (ej: 3001234567). El código +57 se agregará automáticamente.
             </p>
           </div>
 

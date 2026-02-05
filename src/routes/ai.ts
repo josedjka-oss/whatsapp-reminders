@@ -28,6 +28,32 @@ const openai = new OpenAI({
 const DEFAULT_TIMEZONE = "America/Bogota";
 
 /**
+ * Normaliza un número de teléfono agregando +57 si no tiene código de país
+ * @param phone Número de teléfono (puede incluir o no "whatsapp:" y "+")
+ * @returns Número normalizado en formato "whatsapp:+57xxxxxxxxxx"
+ */
+const normalizePhoneNumber = (phone: string): string => {
+  let normalized = phone.trim();
+  
+  // Remover "whatsapp:" si está presente
+  if (normalized.startsWith("whatsapp:")) {
+    normalized = normalized.replace("whatsapp:", "");
+  }
+  
+  // Si no empieza con +, agregar +57 (Colombia)
+  if (!normalized.startsWith("+")) {
+    normalized = `+57${normalized}`;
+  }
+  
+  // Agregar prefijo whatsapp: si no lo tiene
+  if (!normalized.startsWith("whatsapp:")) {
+    normalized = `whatsapp:${normalized}`;
+  }
+  
+  return normalized;
+};
+
+/**
  * Resuelve un nombre de contacto a número de WhatsApp
  */
 const resolveContact = async (name: string): Promise<string | null> => {
@@ -166,7 +192,7 @@ router.post("/", async (req: Request, res: Response) => {
               to: {
                 type: "string",
                 description:
-                  "Número de WhatsApp en formato 'whatsapp:+57xxxxxxxxxx'. Si el usuario menciona un nombre, primero intenta resolverlo usando los contactos disponibles. Si no existe, pregunta al usuario por el número.",
+                  "Número de WhatsApp. Puede ser solo el número (ej: 3001234567) o con código de país (ej: +573001234567). Si el usuario menciona un nombre, primero intenta resolverlo usando los contactos disponibles. Si no existe, pregunta al usuario por el número. El sistema agregará automáticamente +57 si no se proporciona código de país.",
               },
               body: {
                 type: "string",
@@ -251,10 +277,10 @@ router.post("/", async (req: Request, res: Response) => {
                 type: "string",
                 description: "Nombre del contacto (ej: 'Juan', 'María')",
               },
-              phone: {
-                type: "string",
-                description: "Número de WhatsApp en formato 'whatsapp:+57xxxxxxxxxx'",
-              },
+                phone: {
+                  type: "string",
+                  description: "Número de WhatsApp. Puede ser solo el número (ej: 3001234567) o con código de país. El sistema agregará automáticamente +57 si no se proporciona código de país.",
+                },
             },
             required: ["name", "phone"],
           },
@@ -316,6 +342,9 @@ INSTRUCCIONES:
                 continue;
               }
             }
+            
+            // Normalizar número (agregar +57 si no tiene código de país)
+            to = normalizePhoneNumber(to);
 
             // Procesar fecha relativa si es necesario
             let sendAt = args.sendAt;
@@ -430,12 +459,15 @@ INSTRUCCIONES:
               });
             }
           } else if (functionName === "create_contact") {
+            // Normalizar número (agregar +57 si no tiene código de país)
+            const normalizedPhone = normalizePhoneNumber(args.phone);
+            
             const contact = await prisma.contact.upsert({
-              where: { phone: args.phone },
+              where: { phone: normalizedPhone },
               update: { name: args.name },
               create: {
                 name: args.name,
-                phone: args.phone,
+                phone: normalizedPhone,
               },
             });
 
