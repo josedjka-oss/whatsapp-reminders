@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WhatsApp Reminders - Chat",
-  description: "Gestiona tus recordatorios de WhatsApp con lenguaje natural",
+  title: "WhatsApp Reminders - Dashboard",
+  description: "Gestiona tus recordatorios y contactos de WhatsApp",
 };
 
 export default function RootLayout({
