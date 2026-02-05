@@ -9,10 +9,11 @@ interface Reminder {
   id: string;
   to: string;
   body: string;
-  scheduleType: "once" | "daily" | "monthly";
+  scheduleType: "once" | "daily" | "weekly" | "monthly";
   sendAt: string | null;
   hour: number | null;
   minute: number | null;
+  dayOfWeek: number | null;
   dayOfMonth: number | null;
   timezone: string;
   isActive: boolean;
@@ -65,6 +66,12 @@ export const RemindersList = ({ reminders, type }: RemindersListProps) => {
       const hour = reminder.hour !== null ? String(reminder.hour).padStart(2, "0") : "00";
       const minute = reminder.minute !== null ? String(reminder.minute).padStart(2, "0") : "00";
       return `Diariamente a las ${hour}:${minute}`;
+    } else if (reminder.scheduleType === "weekly") {
+      const daysOfWeek = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+      const dayName = reminder.dayOfWeek !== null ? daysOfWeek[reminder.dayOfWeek] : "Día";
+      const hour = reminder.hour !== null ? String(reminder.hour).padStart(2, "0") : "00";
+      const minute = reminder.minute !== null ? String(reminder.minute).padStart(2, "0") : "00";
+      return `Todos los ${dayName}s a las ${hour}:${minute}`;
     } else if (reminder.scheduleType === "monthly") {
       const day = reminder.dayOfMonth || 1;
       const hour = reminder.hour !== null ? String(reminder.hour).padStart(2, "0") : "00";

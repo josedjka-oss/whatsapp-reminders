@@ -52,6 +52,27 @@ const shouldSendReminder = async (reminder: any): Promise<boolean> => {
       return currentHour === reminder.hour && currentMinute === reminder.minute;
     }
 
+    case "weekly": {
+      if (
+        reminder.dayOfWeek === null ||
+        reminder.hour === null ||
+        reminder.minute === null
+      )
+        return false;
+      // Usar timezone del recordatorio o el por defecto
+      // dayOfWeek: 0=domingo, 1=lunes, ..., 6=sábado
+      // Convertir now a la zona horaria del recordatorio y obtener el día de la semana
+      const nowZoned = toZonedTime(now, reminderTimezone);
+      const currentDayOfWeek = nowZoned.getDay(); // getDay() devuelve 0-6 (dom-sab)
+      const currentHour = parseInt(formatInTimeZone(now, reminderTimezone, "HH"));
+      const currentMinute = parseInt(formatInTimeZone(now, reminderTimezone, "mm"));
+      return (
+        currentDayOfWeek === reminder.dayOfWeek &&
+        currentHour === reminder.hour &&
+        currentMinute === reminder.minute
+      );
+    }
+
     case "monthly": {
       if (
         reminder.dayOfMonth === null ||

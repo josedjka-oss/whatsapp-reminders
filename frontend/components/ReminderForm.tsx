@@ -15,10 +15,11 @@ interface ReminderFormData {
   scheduleType: "once" | "daily" | "weekly" | "monthly";
   date: string;
   time: string;
+  dayOfWeek?: number; // 0=domingo, 1=lunes, ..., 6=sábado
   dayOfMonth?: number;
 }
 
-type Step = "contact" | "message" | "frequency" | "time";
+type Step = "contact" | "message" | "frequency" | "dayOfWeek" | "time";
 
 export const ReminderForm = () => {
   const router = useRouter();
@@ -35,6 +36,7 @@ export const ReminderForm = () => {
     scheduleType: "once",
     date: "",
     time: "",
+    dayOfWeek: undefined,
     dayOfMonth: undefined,
   });
 
@@ -80,7 +82,12 @@ export const ReminderForm = () => {
 
   const handleFrequencyNext = () => {
     setError(null);
-    setCurrentStep("time");
+    // Si es "weekly", ir al paso de seleccionar día de la semana
+    if (formData.scheduleType === "weekly") {
+      setCurrentStep("dayOfWeek");
+    } else {
+      setCurrentStep("time");
+    }
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -145,27 +152,19 @@ export const ReminderForm = () => {
         payload.hour = hour;
         payload.minute = minute;
       }
-      // Para "weekly": usar "once" con fecha calculada (7 días desde la fecha base)
+      // Para "weekly": necesita día de la semana y hora
       else if (formData.scheduleType === "weekly") {
-        if (!formData.date || !formData.time) {
-          setError("Fecha y hora son requeridas");
+        if (formData.dayOfWeek === undefined || formData.dayOfWeek === null || !formData.time) {
+          setError("Día de la semana y hora son requeridos para envío semanal");
           setIsSubmitting(false);
           return;
         }
 
-        const baseDate = new Date(`${formData.date}T${formData.time}`);
-        const sendAt = new Date(baseDate);
-        sendAt.setDate(sendAt.getDate() + 7);
-
-        const nowLocal = new Date();
-        if (sendAt <= nowLocal) {
-          setError("La fecha calculada debe ser futura");
-          setIsSubmitting(false);
-          return;
-        }
-
-        payload.scheduleType = "once";
-        payload.sendAt = sendAt.toISOString();
+        const [hour, minute] = formData.time.split(":").map(Number);
+        payload.scheduleType = "weekly";
+        payload.dayOfWeek = formData.dayOfWeek;
+        payload.hour = hour;
+        payload.minute = minute;
       }
       // Para "monthly": necesita día del mes y hora
       else if (formData.scheduleType === "monthly") {
@@ -213,7 +212,7 @@ export const ReminderForm = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "dayOfMonth" ? parseInt(value) || undefined : value,
+      [name]: name === "dayOfMonth" || name === "dayOfWeek" ? parseInt(value) || undefined : value,
     }));
   };
 
@@ -242,15 +241,25 @@ export const ReminderForm = () => {
             <div className={`flex-1 text-center ${currentStep === "frequency" ? "text-green-600 font-semibold" : currentStep === "time" ? "text-gray-600" : "text-gray-400"}`}>
               3. Frecuencia
             </div>
-            <div className={`flex-1 text-center ${currentStep === "time" ? "text-green-600 font-semibold" : "text-gray-400"}`}>
-              4. Hora
+            <div className={`flex-1 text-center ${currentStep === "dayOfWeek" ? "text-green-600 font-semibold" : currentStep === "time" ? "text-gray-600" : "text-gray-400"}`}>
+              {formData.scheduleType === "weekly" ? "4. Día" : "4. Hora"}
             </div>
+            {formData.scheduleType === "weekly" && (
+              <div className={`flex-1 text-center ${currentStep === "time" ? "text-green-600 font-semibold" : "text-gray-400"}`}>
+                5. Hora
+              </div>
+            )}
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-green-500 h-2 rounded-full transition-all duration-300"
               style={{
-                width: currentStep === "contact" ? "25%" : currentStep === "message" ? "50%" : currentStep === "frequency" ? "75%" : "100%",
+                width: 
+                  currentStep === "contact" ? "20%" : 
+                  currentStep === "message" ? "40%" : 
+                  currentStep === "frequency" ? "60%" : 
+                  currentStep === "dayOfWeek" ? "80%" : 
+                  "100%",
               }}
             />
           </div>
@@ -349,7 +358,7 @@ export const ReminderForm = () => {
                   key={option.value}
                   type="button"
                   onClick={() => {
-                    setFormData((prev) => ({ ...prev, scheduleType: option.value as any }));
+                    setFormData((prev) => ({ ...prev, scheduleType: option.value as any, dayOfWeek: undefined }));
                     handleFrequencyNext();
                   }}
                   className={`p-4 border-2 rounded-lg transition-all ${
@@ -373,13 +382,55 @@ export const ReminderForm = () => {
           </div>
         )}
 
-        {/* Paso 4: Hora */}
+        {/* Paso 4: Día de la semana (solo para weekly) */}
+        {currentStep === "dayOfWeek" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">📅 ¿Qué día de la semana?</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 0, label: "Domingo", icon: "🌅" },
+                { value: 1, label: "Lunes", icon: "📅" },
+                { value: 2, label: "Martes", icon: "📅" },
+                { value: 3, label: "Miércoles", icon: "📅" },
+                { value: 4, label: "Jueves", icon: "📅" },
+                { value: 5, label: "Viernes", icon: "📅" },
+                { value: 6, label: "Sábado", icon: "🎉" },
+              ].map((day) => (
+                <button
+                  key={day.value}
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, dayOfWeek: day.value }));
+                    setCurrentStep("time");
+                  }}
+                  className={`p-4 border-2 rounded-lg transition-all ${
+                    formData.dayOfWeek === day.value
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 hover:border-green-300"
+                  }`}
+                >
+                  <div className="text-2xl mb-2">{day.icon}</div>
+                  <div className="font-semibold text-gray-900">{day.label}</div>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentStep("frequency")}
+              className="w-full px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              ← Atrás
+            </button>
+          </div>
+        )}
+
+        {/* Paso 4/5: Hora */}
         {currentStep === "time" && (
           <form onSubmit={handleSubmit} className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">⏰ ¿Cuándo enviar?</h2>
 
-            {/* Fecha (para once y weekly) */}
-            {(formData.scheduleType === "once" || formData.scheduleType === "weekly") && (
+            {/* Fecha (solo para once) */}
+            {formData.scheduleType === "once" && (
               <div>
                 <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
                   Fecha
@@ -451,7 +502,13 @@ export const ReminderForm = () => {
             <div className="flex gap-4">
               <button
                 type="button"
-                onClick={() => setCurrentStep("frequency")}
+                onClick={() => {
+                  if (formData.scheduleType === "weekly") {
+                    setCurrentStep("dayOfWeek");
+                  } else {
+                    setCurrentStep("frequency");
+                  }
+                }}
                 className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 ← Atrás

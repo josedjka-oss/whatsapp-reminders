@@ -13,6 +13,7 @@ router.post("/", async (req: Request, res: Response) => {
       sendAt,
       hour,
       minute,
+      dayOfWeek,
       dayOfMonth,
       timezone = "America/Bogota",
     } = req.body;
@@ -24,9 +25,9 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
 
-    if (!["once", "daily", "monthly"].includes(scheduleType)) {
+    if (!["once", "daily", "weekly", "monthly"].includes(scheduleType)) {
       return res.status(400).json({
-        error: "scheduleType debe ser: once, daily o monthly",
+        error: "scheduleType debe ser: once, daily, weekly o monthly",
       });
     }
 
@@ -40,6 +41,12 @@ router.post("/", async (req: Request, res: Response) => {
     if (scheduleType === "daily" && (hour === null || hour === undefined || minute === null || minute === undefined)) {
       return res.status(400).json({
         error: "hour y minute son requeridos para scheduleType 'daily'",
+      });
+    }
+
+    if (scheduleType === "weekly" && (dayOfWeek === null || dayOfWeek === undefined || hour === null || hour === undefined || minute === null || minute === undefined)) {
+      return res.status(400).json({
+        error: "dayOfWeek, hour y minute son requeridos para scheduleType 'weekly'",
       });
     }
 
@@ -57,6 +64,7 @@ router.post("/", async (req: Request, res: Response) => {
         sendAt: sendAt ? new Date(sendAt) : null,
         hour: hour !== null && hour !== undefined ? parseInt(hour) : null,
         minute: minute !== null && minute !== undefined ? parseInt(minute) : null,
+        dayOfWeek: dayOfWeek !== null && dayOfWeek !== undefined ? parseInt(dayOfWeek) : null,
         dayOfMonth: dayOfMonth !== null && dayOfMonth !== undefined ? parseInt(dayOfMonth) : null,
         timezone,
         isActive: true,
@@ -115,6 +123,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
       "sendAt",
       "hour",
       "minute",
+      "dayOfWeek",
       "dayOfMonth",
       "timezone",
       "isActive",
@@ -124,7 +133,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
       if (req.body[field] !== undefined) {
         if (field === "sendAt" && req.body[field]) {
           updateData[field] = new Date(req.body[field]);
-        } else if (field === "hour" || field === "minute" || field === "dayOfMonth") {
+        } else if (field === "hour" || field === "minute" || field === "dayOfWeek" || field === "dayOfMonth") {
           updateData[field] = req.body[field] !== null ? parseInt(req.body[field]) : null;
         } else {
           updateData[field] = req.body[field];

@@ -14,10 +14,11 @@ model Reminder {
   id          String    @id @default(uuid())
   to          String    // Número destino en formato whatsapp:+...
   body        String    // Mensaje del recordatorio
-  scheduleType String   // once, daily, monthly
+  scheduleType String   // once, daily, weekly, monthly
   sendAt      DateTime? // Para scheduleType "once"
   hour        Int?      // Hora del día (0-23)
   minute      Int?      // Minuto (0-59)
+  dayOfWeek   Int?      // Día de la semana (0-6, 0=domingo) para weekly
   dayOfMonth  Int?      // Día del mes (1-31) para monthly
   timezone    String    @default("America/Bogota")
   isActive    Boolean   @default(true)
