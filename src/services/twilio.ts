@@ -296,21 +296,28 @@ export const forwardToMyWhatsApp = async (
       }
 
       // Construir mensaje con media - WhatsApp Business API requiere formato específico
-      // Para mensajes con media, NO usar contentSid (templates), usar body + MediaUrl directamente
+      // Para mensajes con media, usar body (opcional) + MediaUrl directamente
+      // NOTA: El body puede estar vacío si solo enviamos la imagen
       const messageData: any = {
         from: credentials.fromNumber,
         to: myWhatsAppNumber,
-        body: forwardedBody,
       };
 
+      // Agregar body solo si hay texto
+      if (forwardedBody && forwardedBody.trim() !== "") {
+        messageData.body = forwardedBody;
+      }
+
       // Agregar URLs procesadas al mensaje (formato: MediaUrl0, MediaUrl1, etc.)
+      // WhatsApp Business API requiere que las URLs sean públicas y accesibles
       processedUrls.forEach((url, index) => {
         messageData[`MediaUrl${index}`] = url;
       });
 
       console.log(`[TWILIO] Enviando mensaje con ${processedUrls.length} imagen(es)...`);
       console.log(`[TWILIO] MediaUrl0: ${processedUrls[0]}`);
-      console.log(`[TWILIO] Body: ${forwardedBody.substring(0, 50)}...`);
+      console.log(`[TWILIO] Body: ${forwardedBody ? forwardedBody.substring(0, 50) + '...' : '(vacío)'}`);
+      console.log(`[TWILIO] MessageData completo:`, JSON.stringify(messageData, null, 2));
 
       try {
         const message = await client.messages.create(messageData);
