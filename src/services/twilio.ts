@@ -209,7 +209,12 @@ const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<
     throw new Error(`Error subiendo a imgbb: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as {
+    success: boolean;
+    data?: {
+      url?: string;
+    };
+  };
   
   if (!data.success || !data.data || !data.data.url) {
     throw new Error(`Error en respuesta de imgbb: ${JSON.stringify(data)}`);
@@ -219,35 +224,6 @@ const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<
   console.log(`[IMGBB] ✅ Imagen subida exitosamente. URL pública: ${publicUrl}`);
   
   return publicUrl;
-};
-
-/**
- * Sube una imagen a imgbb.com y obtiene una URL pública
- * imgbb.com es un servicio gratuito de hosting de imágenes
- */
-const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<string> => {
-  // imgbb.com API (gratuito, sin API key para uso básico, pero limitado)
-  // Alternativa: usar otro servicio o implementar nuestro propio servidor de archivos
-  
-  try {
-    // Convertir imagen a base64
-    const base64 = imageBuffer.toString("base64");
-    
-    // Usar imgbb API (requiere API key, pero hay versión sin key)
-    // Por ahora, intentamos con un servicio público simple
-    // Nota: Esto es temporal, idealmente deberíamos tener nuestro propio servicio
-    
-    // Intentar usar la API de imgbb (puede requerir API key)
-    const formData = new FormData();
-    const blob = new Blob([imageBuffer], { type: contentType });
-    formData.append("image", blob);
-    
-    // Por ahora, retornamos null para indicar que necesitamos otra solución
-    // La mejor opción es usar las URLs de Twilio con autenticación embebida en la URL
-    throw new Error("Subir a servicio público no implementado aún");
-  } catch (error) {
-    throw error;
-  }
 };
 
 /**
