@@ -456,12 +456,18 @@ export const ReminderForm = () => {
         )}
 
         {/* Paso 4/5: Hora */}
-        {currentStep === "time" && (
+        {(() => {
+          console.log("[ReminderForm] Evaluando paso time. currentStep:", currentStep, "scheduleType:", formData.scheduleType);
+          return currentStep === "time";
+        })() && (
           <form onSubmit={handleSubmit} className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">⏰ ¿Cuándo enviar?</h2>
 
             {/* Fecha (solo para once) */}
-            {formData.scheduleType === "once" && (
+            {(() => {
+              console.log("[ReminderForm] Evaluando campo fecha. scheduleType:", formData.scheduleType, "¿Mostrar fecha?:", formData.scheduleType === "once");
+              return formData.scheduleType === "once";
+            })() && (
               <div>
                 <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
                   Fecha
