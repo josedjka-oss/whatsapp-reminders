@@ -80,10 +80,12 @@ export const ReminderForm = () => {
     setCurrentStep("frequency");
   };
 
-  const handleFrequencyNext = () => {
+  const handleFrequencyNext = (selectedScheduleType?: string) => {
     setError(null);
+    // Usar el tipo seleccionado si se proporciona, sino usar el del estado
+    const scheduleType = selectedScheduleType || formData.scheduleType;
     // Si es "weekly", ir al paso de seleccionar día de la semana
-    if (formData.scheduleType === "weekly") {
+    if (scheduleType === "weekly") {
       setCurrentStep("dayOfWeek");
     } else {
       setCurrentStep("time");
@@ -373,8 +375,10 @@ export const ReminderForm = () => {
                   key={option.value}
                   type="button"
                   onClick={() => {
-                    setFormData((prev) => ({ ...prev, scheduleType: option.value as any, dayOfWeek: undefined }));
-                    handleFrequencyNext();
+                    const newScheduleType = option.value as any;
+                    setFormData((prev) => ({ ...prev, scheduleType: newScheduleType, dayOfWeek: undefined }));
+                    // Pasar el scheduleType directamente para evitar problemas de asincronía
+                    handleFrequencyNext(newScheduleType);
                   }}
                   className={`p-4 border-2 rounded-lg transition-all ${
                     formData.scheduleType === option.value
