@@ -31,6 +31,12 @@ export const Sidebar = ({ onNewChat }: SidebarProps) => {
         >
           📋 Ver Recordatorios
         </button>
+        <button
+          onClick={() => router.push("/contacts/new")}
+          className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors font-medium"
+        >
+          ➕ Agregar Contacto
+        </button>
       </div>
 
       {/* Chat List */}

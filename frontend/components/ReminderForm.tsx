@@ -1,31 +1,82 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 interface ReminderFormData {
-  to: string;
+  contactId: string;
   body: string;
-  scheduleType: "once" | "daily" | "weekly" | "biweekly" | "monthly";
+  scheduleType: "once" | "daily" | "weekly" | "monthly";
   date: string;
   time: string;
   dayOfMonth?: number;
 }
 
+type Step = "contact" | "message" | "frequency" | "time";
+
 export const ReminderForm = () => {
   const router = useRouter();
+  const [currentStep, setCurrentStep] = useState<Step>("contact");
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const [formData, setFormData] = useState<ReminderFormData>({
-    to: "",
+    contactId: "",
     body: "",
     scheduleType: "once",
     date: "",
     time: "",
     dayOfMonth: undefined,
   });
+
+  // Cargar contactos al montar
+  useEffect(() => {
+    fetchContacts();
+  }, []);
+
+  const fetchContacts = async () => {
+    try {
+      setLoadingContacts(true);
+      const response = await fetch("/api/contacts");
+      if (!response.ok) {
+        throw new Error("Error al cargar contactos");
+      }
+      const data = await response.json();
+      setContacts(data);
+    } catch (err) {
+      console.error("Error cargando contactos:", err);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  const handleContactSelect = (contactId: string) => {
+    setFormData((prev) => ({ ...prev, contactId }));
+    setCurrentStep("message");
+  };
+
+  const handleMessageNext = () => {
+    if (!formData.body.trim()) {
+      setError("El mensaje es requerido");
+      return;
+    }
+    setError(null);
+    setCurrentStep("frequency");
+  };
+
+  const handleFrequencyNext = () => {
+    setError(null);
+    setCurrentStep("time");
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,29 +85,12 @@ export const ReminderForm = () => {
     setSuccess(false);
 
     try {
-      // Validar número de teléfono
-      if (!formData.to.trim()) {
-        setError("El número de teléfono es requerido");
+      // Validar que se haya seleccionado un contacto
+      const selectedContact = contacts.find((c) => c.id === formData.contactId);
+      if (!selectedContact) {
+        setError("Debes seleccionar un contacto");
         setIsSubmitting(false);
         return;
-      }
-
-      // Formatear número (agregar +57 automáticamente si no tiene código de país)
-      let phoneNumber = formData.to.trim();
-      
-      // Remover "whatsapp:" si está presente para procesar solo el número
-      if (phoneNumber.startsWith("whatsapp:")) {
-        phoneNumber = phoneNumber.replace("whatsapp:", "");
-      }
-      
-      // Si no empieza con +, agregar +57 (Colombia)
-      if (!phoneNumber.startsWith("+")) {
-        phoneNumber = `+57${phoneNumber}`;
-      }
-      
-      // Agregar prefijo whatsapp: si no lo tiene
-      if (!phoneNumber.startsWith("whatsapp:")) {
-        phoneNumber = `whatsapp:${phoneNumber}`;
       }
 
       // Validar mensaje
@@ -68,7 +102,7 @@ export const ReminderForm = () => {
 
       // Preparar payload según scheduleType
       let payload: any = {
-        to: phoneNumber,
+        to: selectedContact.phone,
         body: formData.body.trim(),
         timezone: "America/Bogota",
       };
@@ -81,13 +115,9 @@ export const ReminderForm = () => {
           return;
         }
 
-        // Crear fecha en zona horaria local (Bogotá)
-        // El input date devuelve fecha en formato YYYY-MM-DD (zona local)
-        // El input time devuelve hora en formato HH:MM (zona local)
         const sendAt = new Date(`${formData.date}T${formData.time}`);
         const nowLocal = new Date();
         
-        // Comparar en la misma zona horaria (ambas son locales)
         if (sendAt <= nowLocal) {
           setError("La fecha y hora deben ser futuras");
           setIsSubmitting(false);
@@ -120,32 +150,7 @@ export const ReminderForm = () => {
 
         const baseDate = new Date(`${formData.date}T${formData.time}`);
         const sendAt = new Date(baseDate);
-        sendAt.setDate(sendAt.getDate() + 7); // 7 días desde la fecha base
-
-        const nowLocal = new Date();
-        if (sendAt <= nowLocal) {
-          setError("La fecha calculada debe ser futura");
-          setIsSubmitting(false);
-          return;
-        }
-
-        payload.scheduleType = "once";
-        payload.sendAt = sendAt.toISOString();
-      }
-      // Para "biweekly" (cada dos días): usar "once" con fecha calculada (2 días desde hoy)
-      else if (formData.scheduleType === "biweekly") {
-        if (!formData.time) {
-          setError("La hora es requerida");
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Calcular fecha: 2 días desde hoy a la hora especificada
-        const todayLocal = new Date();
-        const [hour, minute] = formData.time.split(":").map(Number);
-        const sendAt = new Date(todayLocal);
-        sendAt.setDate(sendAt.getDate() + 2); // 2 días desde hoy
-        sendAt.setHours(hour, minute, 0, 0);
+        sendAt.setDate(sendAt.getDate() + 7);
 
         const nowLocal = new Date();
         if (sendAt <= nowLocal) {
@@ -172,7 +177,7 @@ export const ReminderForm = () => {
         payload.minute = minute;
       }
 
-      // Llamar al proxy de Vercel (que maneja la autenticación)
+      // Llamar al proxy de Vercel
       const response = await fetch("/api/reminders", {
         method: "POST",
         headers: {
@@ -188,7 +193,7 @@ export const ReminderForm = () => {
 
       setSuccess(true);
       setTimeout(() => {
-        router.push("/chat");
+        router.push("/reminders");
       }, 2000);
     } catch (err: any) {
       setError(err.message || "Error al crear el recordatorio");
@@ -207,166 +212,256 @@ export const ReminderForm = () => {
     }));
   };
 
-  // Obtener fecha mínima (hoy) en zona horaria local (Bogotá)
+  // Obtener fecha mínima (hoy)
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     .toISOString()
     .split("T")[0];
-  // Obtener hora actual en zona horaria local
   const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  const selectedContact = contacts.find((c) => c.id === formData.contactId);
 
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Crear Recordatorio Manual</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">✨ Crear Recordatorio</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Número de teléfono */}
-          <div>
-            <label htmlFor="to" className="block text-sm font-medium text-gray-700 mb-2">
-              Número de WhatsApp
-            </label>
-            <input
-              type="text"
-              id="to"
-              name="to"
-              value={formData.to}
-              onChange={handleChange}
-              placeholder="3001234567 (se agregará +57 automáticamente)"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Solo escribe el número (ej: 3001234567). El código +57 se agregará automáticamente.
-            </p>
+        {/* Indicador de pasos */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <div className={`flex-1 text-center ${currentStep === "contact" ? "text-green-600 font-semibold" : "text-gray-400"}`}>
+              1. Contacto
+            </div>
+            <div className={`flex-1 text-center ${currentStep === "message" ? "text-green-600 font-semibold" : currentStep === "frequency" || currentStep === "time" ? "text-gray-600" : "text-gray-400"}`}>
+              2. Mensaje
+            </div>
+            <div className={`flex-1 text-center ${currentStep === "frequency" ? "text-green-600 font-semibold" : currentStep === "time" ? "text-gray-600" : "text-gray-400"}`}>
+              3. Frecuencia
+            </div>
+            <div className={`flex-1 text-center ${currentStep === "time" ? "text-green-600 font-semibold" : "text-gray-400"}`}>
+              4. Hora
+            </div>
           </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+              style={{
+                width: currentStep === "contact" ? "25%" : currentStep === "message" ? "50%" : currentStep === "frequency" ? "75%" : "100%",
+              }}
+            />
+          </div>
+        </div>
 
-          {/* Mensaje */}
-          <div>
-            <label htmlFor="body" className="block text-sm font-medium text-gray-700 mb-2">
-              Mensaje
-            </label>
+        {/* Paso 1: Seleccionar Contacto */}
+        {currentStep === "contact" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">👤 Selecciona un Contacto</h2>
+            
+            {loadingContacts ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                <p className="mt-2 text-gray-500">Cargando contactos...</p>
+              </div>
+            ) : contacts.length === 0 ? (
+              <div className="text-center py-8 bg-gray-50 rounded-lg">
+                <p className="text-gray-600 mb-4">No tienes contactos guardados aún.</p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/contacts/new")}
+                  className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  ➕ Agregar Primer Contacto
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+                {contacts.map((contact) => (
+                  <button
+                    key={contact.id}
+                    type="button"
+                    onClick={() => handleContactSelect(contact.id)}
+                    className="text-left p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all"
+                  >
+                    <div className="font-semibold text-lg text-gray-900">{contact.name}</div>
+                    <div className="text-sm text-gray-500">{contact.phone.replace("whatsapp:", "")}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Paso 2: Mensaje */}
+        {currentStep === "message" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              💬 Escribe el Mensaje
+            </h2>
+            {selectedContact && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                <span className="text-sm text-gray-600">Para: </span>
+                <span className="font-semibold text-green-800">{selectedContact.name}</span>
+              </div>
+            )}
             <textarea
-              id="body"
-              name="body"
               value={formData.body}
-              onChange={handleChange}
-              rows={4}
+              onChange={(e) => setFormData((prev) => ({ ...prev, body: e.target.value }))}
+              rows={6}
               placeholder="Escribe el mensaje que quieres enviar..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-              required
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              autoFocus
             />
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setCurrentStep("contact")}
+                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                ← Atrás
+              </button>
+              <button
+                type="button"
+                onClick={handleMessageNext}
+                className="flex-1 bg-green-500 text-white py-2 px-6 rounded-lg hover:bg-green-600 transition-colors font-medium"
+              >
+                Siguiente →
+              </button>
+            </div>
           </div>
+        )}
 
-          {/* Tipo de frecuencia */}
-          <div>
-            <label htmlFor="scheduleType" className="block text-sm font-medium text-gray-700 mb-2">
-              Frecuencia
-            </label>
-            <select
-              id="scheduleType"
-              name="scheduleType"
-              value={formData.scheduleType}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="once">Una vez</option>
-              <option value="daily">Diariamente</option>
-              <option value="weekly">Semanalmente (cada semana)</option>
-              <option value="biweekly">Cada dos días</option>
-              <option value="monthly">Mensual (cada mes)</option>
-            </select>
-          </div>
-
-          {/* Fecha (para once, weekly, biweekly) */}
-          {(formData.scheduleType === "once" ||
-            formData.scheduleType === "weekly" ||
-            formData.scheduleType === "biweekly") && (
-            <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha
-              </label>
-              <input
-                type="date"
-                id="date"
-                name="date"
-                value={formData.date}
-                onChange={handleChange}
-                min={today}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                required
-              />
+        {/* Paso 3: Frecuencia */}
+        {currentStep === "frequency" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">📅 ¿Con qué frecuencia?</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: "once", label: "Una vez", icon: "📌" },
+                { value: "daily", label: "Diariamente", icon: "🔄" },
+                { value: "weekly", label: "Semanalmente", icon: "📆" },
+                { value: "monthly", label: "Mensual", icon: "🗓️" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, scheduleType: option.value as any }));
+                    handleFrequencyNext();
+                  }}
+                  className={`p-4 border-2 rounded-lg transition-all ${
+                    formData.scheduleType === option.value
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 hover:border-green-300"
+                  }`}
+                >
+                  <div className="text-2xl mb-2">{option.icon}</div>
+                  <div className="font-semibold text-gray-900">{option.label}</div>
+                </button>
+              ))}
             </div>
-          )}
-
-          {/* Día del mes (para monthly) */}
-          {formData.scheduleType === "monthly" && (
-            <div>
-              <label htmlFor="dayOfMonth" className="block text-sm font-medium text-gray-700 mb-2">
-                Día del mes (1-31)
-              </label>
-              <input
-                type="number"
-                id="dayOfMonth"
-                name="dayOfMonth"
-                value={formData.dayOfMonth || ""}
-                onChange={handleChange}
-                min={1}
-                max={31}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                required
-              />
-            </div>
-          )}
-
-          {/* Hora */}
-          <div>
-            <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
-              Hora
-            </label>
-            <input
-              type="time"
-              id="time"
-              name="time"
-              value={formData.time}
-              onChange={handleChange}
-              defaultValue={currentTime}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              required
-            />
-          </div>
-
-          {/* Mensajes de error/éxito */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-              ✅ Recordatorio creado exitosamente. Redirigiendo...
-            </div>
-          )}
-
-          {/* Botones */}
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 bg-green-500 text-white py-3 px-6 rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Creando..." : "Crear Recordatorio"}
-            </button>
             <button
               type="button"
-              onClick={() => router.push("/chat")}
-              className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={() => setCurrentStep("message")}
+              className="w-full px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Cancelar
+              ← Atrás
             </button>
           </div>
-        </form>
+        )}
+
+        {/* Paso 4: Hora */}
+        {currentStep === "time" && (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">⏰ ¿Cuándo enviar?</h2>
+
+            {/* Fecha (para once y weekly) */}
+            {(formData.scheduleType === "once" || formData.scheduleType === "weekly") && (
+              <div>
+                <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                  Fecha
+                </label>
+                <input
+                  type="date"
+                  id="date"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  min={today}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                />
+              </div>
+            )}
+
+            {/* Día del mes (para monthly) */}
+            {formData.scheduleType === "monthly" && (
+              <div>
+                <label htmlFor="dayOfMonth" className="block text-sm font-medium text-gray-700 mb-2">
+                  Día del mes (1-31)
+                </label>
+                <input
+                  type="number"
+                  id="dayOfMonth"
+                  name="dayOfMonth"
+                  value={formData.dayOfMonth || ""}
+                  onChange={handleChange}
+                  min={1}
+                  max={31}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                />
+              </div>
+            )}
+
+            {/* Hora */}
+            <div>
+              <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+                Hora
+              </label>
+              <input
+                type="time"
+                id="time"
+                name="time"
+                value={formData.time}
+                onChange={handleChange}
+                defaultValue={currentTime}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            {/* Mensajes de error/éxito */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+                ✅ Recordatorio creado exitosamente. Redirigiendo...
+              </div>
+            )}
+
+            {/* Botones */}
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setCurrentStep("frequency")}
+                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                ← Atrás
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 bg-green-500 text-white py-3 px-6 rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Creando..." : "✨ Crear Recordatorio"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

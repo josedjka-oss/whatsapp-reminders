@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale/es";
+import { EditReminderModal } from "./EditReminderModal";
 
 interface Reminder {
   id: string;
@@ -25,6 +27,36 @@ interface RemindersListProps {
 }
 
 export const RemindersList = ({ reminders, type }: RemindersListProps) => {
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este recordatorio?")) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/reminders/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al eliminar");
+      }
+
+      // Recargar la página para actualizar la lista
+      window.location.reload();
+    } catch (error) {
+      alert("Error al eliminar el recordatorio");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleEditSave = () => {
+    window.location.reload();
+  };
   const formatReminderDate = (reminder: Reminder): string => {
     if (reminder.scheduleType === "once" && reminder.sendAt) {
       const date = new Date(reminder.sendAt);
@@ -90,23 +122,48 @@ export const RemindersList = ({ reminders, type }: RemindersListProps) => {
   }
 
   return (
-    <div className="space-y-4">
-      {reminders.map((reminder) => (
-        <div
-          key={reminder.id}
-          className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-gray-900">
-                  {formatPhoneNumber(reminder.to)}
-                </h3>
-                {getStatusBadge(reminder)}
+    <>
+      {editingReminder && (
+        <EditReminderModal
+          reminder={editingReminder}
+          onClose={() => setEditingReminder(null)}
+          onSave={handleEditSave}
+        />
+      )}
+      <div className="space-y-4">
+        {reminders.map((reminder) => (
+          <div
+            key={reminder.id}
+            className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-gray-900">
+                    {formatPhoneNumber(reminder.to)}
+                  </h3>
+                  {getStatusBadge(reminder)}
+                </div>
+                <p className="text-gray-700 text-sm mb-2">{reminder.body}</p>
               </div>
-              <p className="text-gray-700 text-sm mb-2">{reminder.body}</p>
+              {reminder.isActive && type === "scheduled" && (
+                <div className="flex gap-2 ml-4">
+                  <button
+                    onClick={() => setEditingReminder(reminder)}
+                    className="px-3 py-1 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(reminder.id)}
+                    disabled={deletingId === reminder.id}
+                    className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                  >
+                    {deletingId === reminder.id ? "Eliminando..." : "🗑️ Eliminar"}
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
 
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center gap-4">
@@ -142,6 +199,7 @@ export const RemindersList = ({ reminders, type }: RemindersListProps) => {
           )}
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 };
