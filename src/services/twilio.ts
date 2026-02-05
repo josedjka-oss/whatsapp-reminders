@@ -4,7 +4,7 @@ import { prisma } from "../db";
 /**
  * Template ID aprobado de WhatsApp Business
  */
-const WHATSAPP_TEMPLATE_CONTENT_SID = "HX1d443af43266b056998367e82a4441bd";
+const WHATSAPP_TEMPLATE_CONTENT_SID = "HX92eca9f1cc315265de2a85951684723a";
 
 /**
  * Obtiene las credenciales de Twilio y valida que estén presentes
@@ -84,13 +84,34 @@ export const sendWhatsAppMessage = async ({
     }
 
     // Enviar usando template aprobado
+    // Para WhatsApp templates, contentVariables debe ser un string JSON
+    // con las claves como strings que corresponden a los números de las variables
+    // Formato: {"1": "valor", "2": "valor2", ...}
+    
+    // Limpiar el texto de caracteres problemáticos que puedan romper el JSON
+    const cleanReminderText = reminderText
+      .replace(/[\u0000-\u001F]/g, '') // Remover caracteres de control
+      .trim();
+    
+    const contentVariables = {
+      "1": cleanReminderText
+    };
+    
+    const contentVariablesJson = JSON.stringify(contentVariables);
+    console.log(`[TWILIO] ContentVariables JSON: ${contentVariablesJson}`);
+    
+    // Validar que el JSON sea válido
+    try {
+      JSON.parse(contentVariablesJson);
+    } catch (error) {
+      throw new Error(`Error al crear JSON de contentVariables: ${error}`);
+    }
+    
     const message = await client.messages.create({
       from: credentials.fromNumber,
       to: to,
       contentSid: WHATSAPP_TEMPLATE_CONTENT_SID,
-      contentVariables: JSON.stringify({
-        "1": reminderText
-      })
+      contentVariables: contentVariablesJson
     });
 
     console.log(`[TWILIO] ✅ Mensaje creado en Twilio. SID: ${message.sid}`);

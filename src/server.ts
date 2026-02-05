@@ -8,6 +8,7 @@ import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
 import aiRouter from "./routes/ai";
 import twilioStatusRouter from "./routes/twilio-status";
+import whatsappSendersRouter from "./routes/whatsapp-senders";
 // import checkSandboxRouter from "./routes/check-sandbox"; // Deshabilitado: Ya no usamos Sandbox
 import { startScheduler } from "./services/scheduler";
 
@@ -70,6 +71,7 @@ app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/twilio-status", twilioStatusRouter);
+app.use("/api/whatsapp-senders", whatsappSendersRouter);
 // app.use("/api/check-sandbox", checkSandboxRouter); // Deshabilitado: Ya no usamos Sandbox
 app.use("/webhooks", webhooksRouter);
 
@@ -95,6 +97,7 @@ app.get("/", (req, res) => {
         messages: "/api/messages",
         ai: "/api/ai",
         twilioStatus: "/api/twilio-status",
+        whatsappSenders: "/api/whatsapp-senders",
         // checkSandbox: "/api/check-sandbox", // Deshabilitado: Ya no usamos Sandbox
         webhooks: "/webhooks/twilio/whatsapp",
         health: "/health",
