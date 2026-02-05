@@ -411,9 +411,11 @@ export const ReminderForm = () => {
         )}
 
         {/* Paso 4: Día de la semana (solo para weekly) */}
-        {currentStep === "dayOfWeek" && (
+        {(() => {
+          console.log("[ReminderForm] Evaluando paso dayOfWeek. currentStep:", currentStep, "scheduleType:", formData.scheduleType, "¿Es dayOfWeek?:", currentStep === "dayOfWeek");
+          return currentStep === "dayOfWeek";
+        })() && (
           <div className="space-y-4">
-            {console.log("[ReminderForm] Renderizando paso dayOfWeek. currentStep:", currentStep, "scheduleType:", formData.scheduleType)}
             <h2 className="text-xl font-semibold text-gray-800 mb-4">📅 ¿Qué día de la semana?</h2>
             <div className="grid grid-cols-2 gap-3">
               {[
