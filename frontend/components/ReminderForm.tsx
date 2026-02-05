@@ -22,6 +22,8 @@ interface ReminderFormData {
 type Step = "contact" | "message" | "frequency" | "dayOfWeek" | "time";
 
 export const ReminderForm = () => {
+  console.log("[ReminderForm] Componente cargado - VERSIÓN CON WEEKLY");
+  
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<Step>("contact");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -29,6 +31,8 @@ export const ReminderForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  
+  console.log("[ReminderForm] Estado inicial - currentStep:", "contact", "scheduleType:", "once");
 
   const [formData, setFormData] = useState<ReminderFormData>({
     contactId: "",
@@ -42,8 +46,19 @@ export const ReminderForm = () => {
 
   // Cargar contactos al montar
   useEffect(() => {
+    console.log("[ReminderForm] useEffect - Componente montado");
     fetchContacts();
   }, []);
+  
+  // Log cuando cambia el currentStep
+  useEffect(() => {
+    console.log("[ReminderForm] currentStep cambió a:", currentStep);
+  }, [currentStep]);
+  
+  // Log cuando cambia el scheduleType
+  useEffect(() => {
+    console.log("[ReminderForm] scheduleType cambió a:", formData.scheduleType);
+  }, [formData.scheduleType]);
 
   const fetchContacts = async () => {
     try {
