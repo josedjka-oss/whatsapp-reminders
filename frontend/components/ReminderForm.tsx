@@ -92,6 +92,7 @@ export const ReminderForm = () => {
     // Si es "weekly", ir al paso de seleccionar día de la semana
     if (scheduleType === "weekly") {
       console.log("[ReminderForm] ✅ Navegando a paso 'dayOfWeek'");
+      alert("DEBUG: Deberías ver el paso para elegir el día de la semana ahora.");
       setCurrentStep("dayOfWeek");
     } else {
       console.log("[ReminderForm] ⚠️ Navegando a paso 'time' (no es weekly)");
@@ -381,6 +382,12 @@ export const ReminderForm = () => {
                   onClick={() => {
                     const newScheduleType = option.value as any;
                     console.log("[ReminderForm] Frecuencia seleccionada:", newScheduleType);
+                    
+                    // Alert temporal para debugging
+                    if (newScheduleType === "weekly") {
+                      alert("DEBUG: Seleccionaste Semanalmente. Deberías ver el paso para elegir el día.");
+                    }
+                    
                     setFormData((prev) => {
                       const updated = { ...prev, scheduleType: newScheduleType, dayOfWeek: undefined };
                       console.log("[ReminderForm] Estado actualizado:", JSON.stringify(updated, null, 2));
