@@ -46,7 +46,15 @@ export const ContactForm = ({ onSuccess, onCancel }: ContactFormProps) => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+        const errorMessage = errorData.error || `Error ${response.status}: ${response.statusText}`;
+        console.error("[ContactForm] Error del servidor:", response.status, errorData);
+        
+        // Si es 404, el backend probablemente no se ha desplegado aún
+        if (response.status === 404) {
+          throw new Error("El endpoint de contactos no está disponible. Por favor, espera unos minutos mientras se despliega el backend.");
+        }
+        
+        throw new Error(errorMessage);
       }
 
       setSuccess(true);

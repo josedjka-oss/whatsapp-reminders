@@ -48,6 +48,11 @@ export const ReminderForm = () => {
       setLoadingContacts(true);
       const response = await fetch("/api/contacts");
       if (!response.ok) {
+        // Si es 404, el backend probablemente no se ha desplegado aún
+        if (response.status === 404) {
+          console.warn("[ReminderForm] Endpoint de contactos no disponible (404). El backend puede estar desplegándose.");
+          return; // Continuar sin contactos en lugar de mostrar error
+        }
         throw new Error("Error al cargar contactos");
       }
       const data = await response.json();
