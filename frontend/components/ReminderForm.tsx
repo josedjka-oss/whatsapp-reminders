@@ -97,6 +97,8 @@ export const ReminderForm = () => {
     setSuccess(false);
 
     try {
+      console.log("[ReminderForm] handleSubmit - formData completo:", JSON.stringify(formData, null, 2));
+      
       // Validar que se haya seleccionado un contacto
       const selectedContact = contacts.find((c) => c.id === formData.contactId);
       if (!selectedContact) {
@@ -118,9 +120,12 @@ export const ReminderForm = () => {
         body: formData.body.trim(),
         timezone: "America/Bogota",
       };
+      
+      console.log("[ReminderForm] scheduleType antes de procesar:", formData.scheduleType);
 
       // Para "once": necesita fecha y hora completa
       if (formData.scheduleType === "once") {
+        console.log("[ReminderForm] Procesando como 'once'");
         if (!formData.date || !formData.time) {
           setError("Fecha y hora son requeridas para envío único");
           setIsSubmitting(false);
@@ -154,7 +159,12 @@ export const ReminderForm = () => {
       }
       // Para "weekly": necesita día de la semana y hora
       else if (formData.scheduleType === "weekly") {
+        console.log("[ReminderForm] Procesando como 'weekly'");
+        console.log("[ReminderForm] dayOfWeek:", formData.dayOfWeek);
+        console.log("[ReminderForm] time:", formData.time);
+        
         if (formData.dayOfWeek === undefined || formData.dayOfWeek === null || !formData.time) {
+          console.error("[ReminderForm] ERROR: Faltan datos para weekly. dayOfWeek:", formData.dayOfWeek, "time:", formData.time);
           setError("Día de la semana y hora son requeridos para envío semanal");
           setIsSubmitting(false);
           return;
@@ -166,6 +176,9 @@ export const ReminderForm = () => {
         payload.hour = hour;
         payload.minute = minute;
         console.log("[ReminderForm] Payload para weekly:", JSON.stringify(payload, null, 2));
+      }
+      else {
+        console.warn("[ReminderForm] scheduleType no reconocido:", formData.scheduleType);
       }
       // Para "monthly": necesita día del mes y hora
       else if (formData.scheduleType === "monthly") {
