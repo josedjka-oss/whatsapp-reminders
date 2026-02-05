@@ -58,7 +58,7 @@ export const ReminderForm = () => {
   // Log cuando cambia el scheduleType
   useEffect(() => {
     console.log("[ReminderForm] scheduleType cambió a:", formData.scheduleType);
-  }, [formData.scheduleType]);
+  }, [formData]);
 
   const fetchContacts = async () => {
     try {
@@ -433,10 +433,7 @@ export const ReminderForm = () => {
         )}
 
         {/* Paso 4: Día de la semana (solo para weekly) */}
-        {(() => {
-          console.log("[ReminderForm] Evaluando paso dayOfWeek. currentStep:", currentStep, "scheduleType:", formData.scheduleType, "¿Es dayOfWeek?:", currentStep === "dayOfWeek");
-          return currentStep === "dayOfWeek";
-        })() && (
+        {currentStep === "dayOfWeek" && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">📅 ¿Qué día de la semana?</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -478,18 +475,12 @@ export const ReminderForm = () => {
         )}
 
         {/* Paso 4/5: Hora */}
-        {(() => {
-          console.log("[ReminderForm] Evaluando paso time. currentStep:", currentStep, "scheduleType:", formData.scheduleType);
-          return currentStep === "time";
-        })() && (
+        {currentStep === "time" && (
           <form onSubmit={handleSubmit} className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">⏰ ¿Cuándo enviar?</h2>
 
             {/* Fecha (solo para once) */}
-            {(() => {
-              console.log("[ReminderForm] Evaluando campo fecha. scheduleType:", formData.scheduleType, "¿Mostrar fecha?:", formData.scheduleType === "once");
-              return formData.scheduleType === "once";
-            })() && (
+            {formData.scheduleType === "once" && (
               <div>
                 <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
                   Fecha

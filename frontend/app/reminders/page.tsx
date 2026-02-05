@@ -8,10 +8,11 @@ interface Reminder {
   id: string;
   to: string;
   body: string;
-  scheduleType: "once" | "daily" | "monthly";
+  scheduleType: "once" | "daily" | "weekly" | "monthly";
   sendAt: string | null;
   hour: number | null;
   minute: number | null;
+  dayOfWeek: number | null;
   dayOfMonth: number | null;
   timezone: string;
   isActive: boolean;
@@ -70,8 +71,8 @@ export default function RemindersPage() {
         if (r.scheduleType === "once" && r.sendAt) {
           return new Date(r.sendAt) >= now;
         }
-        // daily y monthly siempre son programados si están activos
-        return r.scheduleType === "daily" || r.scheduleType === "monthly";
+        // daily, weekly y monthly siempre son programados si están activos
+        return r.scheduleType === "daily" || r.scheduleType === "weekly" || r.scheduleType === "monthly";
       });
     }
   };
@@ -100,6 +101,7 @@ export default function RemindersPage() {
                 r.isActive &&
                 ((r.scheduleType === "once" && r.sendAt && new Date(r.sendAt) >= now) ||
                   r.scheduleType === "daily" ||
+                  r.scheduleType === "weekly" ||
                   r.scheduleType === "monthly")
               );
             }).length})
