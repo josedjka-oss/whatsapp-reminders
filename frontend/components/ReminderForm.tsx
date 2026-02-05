@@ -84,13 +84,17 @@ export const ReminderForm = () => {
     setError(null);
     // Usar el tipo seleccionado si se proporciona, sino usar el del estado
     const scheduleType = selectedScheduleType || formData.scheduleType;
-    console.log("[ReminderForm] handleFrequencyNext - scheduleType:", scheduleType);
+    console.log("[ReminderForm] handleFrequencyNext - scheduleType recibido:", selectedScheduleType);
+    console.log("[ReminderForm] handleFrequencyNext - scheduleType del estado:", formData.scheduleType);
+    console.log("[ReminderForm] handleFrequencyNext - scheduleType final:", scheduleType);
+    console.log("[ReminderForm] handleFrequencyNext - ¿Es weekly?:", scheduleType === "weekly");
+    
     // Si es "weekly", ir al paso de seleccionar día de la semana
     if (scheduleType === "weekly") {
-      console.log("[ReminderForm] Navegando a paso 'dayOfWeek'");
+      console.log("[ReminderForm] ✅ Navegando a paso 'dayOfWeek'");
       setCurrentStep("dayOfWeek");
     } else {
-      console.log("[ReminderForm] Navegando a paso 'time'");
+      console.log("[ReminderForm] ⚠️ Navegando a paso 'time' (no es weekly)");
       setCurrentStep("time");
     }
   };
@@ -409,6 +413,7 @@ export const ReminderForm = () => {
         {/* Paso 4: Día de la semana (solo para weekly) */}
         {currentStep === "dayOfWeek" && (
           <div className="space-y-4">
+            {console.log("[ReminderForm] Renderizando paso dayOfWeek. currentStep:", currentStep, "scheduleType:", formData.scheduleType)}
             <h2 className="text-xl font-semibold text-gray-800 mb-4">📅 ¿Qué día de la semana?</h2>
             <div className="grid grid-cols-2 gap-3">
               {[
