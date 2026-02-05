@@ -6,8 +6,9 @@ const router = Router();
 /**
  * Endpoint temporal para ejecutar la migración de dayOfWeek
  * IMPORTANTE: Eliminar este endpoint después de ejecutar la migración
+ * Soporta tanto GET como POST para facilitar el acceso desde el navegador
  */
-router.post("/add-day-of-week", async (req: Request, res: Response) => {
+const executeMigration = async (req: Request, res: Response) => {
   try {
     // Ejecutar la migración SQL
     await prisma.$executeRawUnsafe(`
@@ -26,7 +27,11 @@ router.post("/add-day-of-week", async (req: Request, res: Response) => {
       error: error.message || "Error al ejecutar la migración",
     });
   }
-});
+};
+
+// Soporta tanto GET como POST
+router.get("/add-day-of-week", executeMigration);
+router.post("/add-day-of-week", executeMigration);
 
 /**
  * Endpoint para verificar que la migración se ejecutó correctamente
