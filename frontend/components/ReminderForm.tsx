@@ -179,9 +179,6 @@ export const ReminderForm = () => {
         payload.minute = minute;
         console.log("[ReminderForm] Payload para weekly:", JSON.stringify(payload, null, 2));
       }
-      else {
-        console.warn("[ReminderForm] scheduleType no reconocido:", formData.scheduleType);
-      }
       // Para "monthly": necesita día del mes y hora
       else if (formData.scheduleType === "monthly") {
         if (!formData.dayOfMonth || !formData.time) {
