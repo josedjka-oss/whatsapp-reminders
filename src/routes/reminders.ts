@@ -6,6 +6,8 @@ const router = Router();
 // Crear recordatorio
 router.post("/", async (req: Request, res: Response) => {
   try {
+    console.log("[REMINDERS POST] Body recibido:", JSON.stringify(req.body, null, 2));
+    
     const {
       to,
       body,
@@ -17,6 +19,11 @@ router.post("/", async (req: Request, res: Response) => {
       dayOfMonth,
       timezone = "America/Bogota",
     } = req.body;
+
+    console.log("[REMINDERS POST] scheduleType:", scheduleType);
+    console.log("[REMINDERS POST] dayOfWeek:", dayOfWeek);
+    console.log("[REMINDERS POST] hour:", hour);
+    console.log("[REMINDERS POST] minute:", minute);
 
     // Validaciones básicas
     if (!to || !body || !scheduleType) {
@@ -56,20 +63,26 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
 
+    const reminderData = {
+      to,
+      body,
+      scheduleType,
+      sendAt: sendAt ? new Date(sendAt) : null,
+      hour: hour !== null && hour !== undefined ? parseInt(hour) : null,
+      minute: minute !== null && minute !== undefined ? parseInt(minute) : null,
+      dayOfWeek: dayOfWeek !== null && dayOfWeek !== undefined ? parseInt(dayOfWeek) : null,
+      dayOfMonth: dayOfMonth !== null && dayOfMonth !== undefined ? parseInt(dayOfMonth) : null,
+      timezone,
+      isActive: true,
+    };
+
+    console.log("[REMINDERS POST] Datos a guardar:", JSON.stringify(reminderData, null, 2));
+
     const reminder = await prisma.reminder.create({
-      data: {
-        to,
-        body,
-        scheduleType,
-        sendAt: sendAt ? new Date(sendAt) : null,
-        hour: hour !== null && hour !== undefined ? parseInt(hour) : null,
-        minute: minute !== null && minute !== undefined ? parseInt(minute) : null,
-        dayOfWeek: dayOfWeek !== null && dayOfWeek !== undefined ? parseInt(dayOfWeek) : null,
-        dayOfMonth: dayOfMonth !== null && dayOfMonth !== undefined ? parseInt(dayOfMonth) : null,
-        timezone,
-        isActive: true,
-      },
+      data: reminderData,
     });
+
+    console.log("[REMINDERS POST] Recordatorio creado:", JSON.stringify(reminder, null, 2));
 
     return res.status(201).json(reminder);
   } catch (error: any) {

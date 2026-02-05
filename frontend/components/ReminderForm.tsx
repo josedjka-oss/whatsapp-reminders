@@ -165,6 +165,7 @@ export const ReminderForm = () => {
         payload.dayOfWeek = formData.dayOfWeek;
         payload.hour = hour;
         payload.minute = minute;
+        console.log("[ReminderForm] Payload para weekly:", JSON.stringify(payload, null, 2));
       }
       // Para "monthly": necesita día del mes y hora
       else if (formData.scheduleType === "monthly") {
@@ -182,6 +183,7 @@ export const ReminderForm = () => {
       }
 
       // Llamar al proxy de Vercel
+      console.log("[ReminderForm] Enviando payload completo:", JSON.stringify(payload, null, 2));
       const response = await fetch("/api/reminders", {
         method: "POST",
         headers: {
