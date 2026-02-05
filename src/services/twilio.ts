@@ -250,13 +250,6 @@ export const forwardToMyWhatsApp = async (
     if (mediaUrls.length > 0) {
       console.log(`[TWILIO] Reenviando mensaje con ${mediaUrls.length} imagen(es)`);
       
-      // Construir mensaje con media descargadas
-      const messageData: any = {
-        from: credentials.fromNumber,
-        to: myWhatsAppNumber,
-        body: forwardedBody,
-      };
-
       // Descargar cada imagen, subirla a imgbb y obtener URL pública
       // Las URLs de Twilio requieren autenticación y no funcionan para reenvío
       // Solución: Subir a imgbb para obtener URL pública accesible
@@ -292,11 +285,6 @@ export const forwardToMyWhatsApp = async (
         }
       }
 
-      // Agregar URLs procesadas al mensaje
-      processedUrls.forEach((url, index) => {
-        messageData[`MediaUrl${index}`] = url;
-      });
-
       if (processedUrls.length === 0) {
         // Si no se pudieron procesar las imágenes, enviar solo texto usando template
         console.warn(`[TWILIO] No se pudieron procesar las imágenes, enviando solo texto`);
@@ -307,8 +295,30 @@ export const forwardToMyWhatsApp = async (
         return;
       }
 
+      // Construir mensaje con media - WhatsApp Business API requiere formato específico
+      // Para mensajes con media, NO usar contentSid (templates), usar body + MediaUrl directamente
+      const messageData: any = {
+        from: credentials.fromNumber,
+        to: myWhatsAppNumber,
+        body: forwardedBody,
+      };
+
+      // Agregar URLs procesadas al mensaje (formato: MediaUrl0, MediaUrl1, etc.)
+      processedUrls.forEach((url, index) => {
+        messageData[`MediaUrl${index}`] = url;
+      });
+
+      console.log(`[TWILIO] Enviando mensaje con ${processedUrls.length} imagen(es)...`);
+      console.log(`[TWILIO] MediaUrl0: ${processedUrls[0]}`);
+      console.log(`[TWILIO] Body: ${forwardedBody.substring(0, 50)}...`);
+
       try {
         const message = await client.messages.create(messageData);
+        
+        console.log(`[TWILIO] Mensaje creado. SID: ${message.sid}`);
+        console.log(`[TWILIO] Estado: ${message.status}`);
+        console.log(`[TWILIO] ErrorCode: ${message.errorCode || 'ninguno'}`);
+        console.log(`[TWILIO] ErrorMessage: ${message.errorMessage || 'ninguno'}`);
         
         // Guardar mensaje en base de datos
         await prisma.message.create({
@@ -325,12 +335,15 @@ export const forwardToMyWhatsApp = async (
         
         // Verificar si el mensaje tiene errores relacionados con media
         if (message.errorCode) {
-          console.warn(`[TWILIO] ⚠️  Mensaje reenviado pero puede tener errores: ${message.errorCode} - ${message.errorMessage}`);
-          console.warn(`[TWILIO] ⚠️  Las imágenes pueden no aparecer si las URLs de Twilio no son accesibles`);
+          console.warn(`[TWILIO] ⚠️  Mensaje reenviado pero tiene errores: ${message.errorCode} - ${message.errorMessage}`);
+          console.warn(`[TWILIO] ⚠️  Las imágenes pueden no aparecer. Revisa la URL de imgbb: ${processedUrls[0]}`);
+        } else {
+          console.log(`[TWILIO] ✅ Mensaje enviado sin errores. La imagen debería aparecer.`);
         }
       } catch (error: any) {
         // Si falla al enviar con imágenes, intentar enviar solo texto
         console.error(`[TWILIO] ❌ Error enviando mensaje con imágenes:`, error.message);
+        console.error(`[TWILIO] Stack trace:`, error.stack);
         console.warn(`[TWILIO] Intentando enviar solo texto...`);
         await sendWhatsAppMessage({
           to: myWhatsAppNumber,
