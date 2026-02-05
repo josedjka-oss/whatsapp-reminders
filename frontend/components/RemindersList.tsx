@@ -181,6 +181,8 @@ export const RemindersList = ({ reminders, type }: RemindersListProps) => {
                     ? "Una vez"
                     : reminder.scheduleType === "daily"
                     ? "Diario"
+                    : reminder.scheduleType === "weekly"
+                    ? "Semanal"
                     : "Mensual"}
                 </span>
               </span>
