@@ -177,6 +177,51 @@ const downloadTwilioMedia = async (mediaUrl: string, accountSid: string, authTok
 };
 
 /**
+ * Sube una imagen a imgbb y retorna la URL pública
+ */
+const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<string> => {
+  const imgbbApiKey = process.env.IMGBB_API_KEY?.trim();
+  
+  if (!imgbbApiKey) {
+    throw new Error("IMGBB_API_KEY no está configurado. Configúralo en Render Dashboard > Environment Variables");
+  }
+
+  // Convertir buffer a base64
+  const base64Image = imageBuffer.toString("base64");
+  
+  // Crear FormData para la petición
+  const formData = new URLSearchParams();
+  formData.append("key", imgbbApiKey);
+  formData.append("image", base64Image);
+
+  console.log(`[IMGBB] Subiendo imagen a imgbb (${imageBuffer.length} bytes, tipo: ${contentType})...`);
+
+  const response = await fetch("https://api.imgbb.com/1/upload", {
+    method: "POST",
+    body: formData,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error subiendo a imgbb: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  
+  if (!data.success || !data.data || !data.data.url) {
+    throw new Error(`Error en respuesta de imgbb: ${JSON.stringify(data)}`);
+  }
+
+  const publicUrl = data.data.url;
+  console.log(`[IMGBB] ✅ Imagen subida exitosamente. URL pública: ${publicUrl}`);
+  
+  return publicUrl;
+};
+
+/**
  * Sube una imagen a imgbb.com y obtiene una URL pública
  * imgbb.com es un servicio gratuito de hosting de imágenes
  */
@@ -236,10 +281,9 @@ export const forwardToMyWhatsApp = async (
         body: forwardedBody,
       };
 
-      // Descargar cada imagen, convertir a base64 y crear data URL pública
-      // Twilio WhatsApp acepta URLs públicas, pero las URLs de Twilio requieren autenticación
-      // Solución: Descargar, convertir a base64 data URL (aunque puede no funcionar para todas las imágenes grandes)
-      // Alternativa mejor: Subir a un servicio público como imgbb, pero requiere API
+      // Descargar cada imagen, subirla a imgbb y obtener URL pública
+      // Las URLs de Twilio requieren autenticación y no funcionan para reenvío
+      // Solución: Subir a imgbb para obtener URL pública accesible
       
       const processedUrls: string[] = [];
       
@@ -259,11 +303,12 @@ export const forwardToMyWhatsApp = async (
           
           console.log(`[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`);
           
-          // Intentar usar la URL original primero (puede funcionar si es la misma cuenta)
-          // Si no funciona, necesitaremos subir a un servicio público
-          // Por ahora, intentamos con la URL original
-          processedUrls.push(mediaUrl);
-          console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada (usando URL original)`);
+          // Subir a imgbb para obtener URL pública
+          console.log(`[TWILIO] Subiendo imagen ${i + 1} a imgbb...`);
+          const publicUrl = await uploadToImgbb(imageBuffer, contentType);
+          
+          processedUrls.push(publicUrl);
+          console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada y subida a imgbb: ${publicUrl}`);
           
         } catch (error: any) {
           console.error(`[TWILIO] ❌ Error procesando imagen ${i + 1}:`, error.message);
@@ -286,20 +331,36 @@ export const forwardToMyWhatsApp = async (
         return;
       }
 
-      const message = await client.messages.create(messageData);
-      
-      // Guardar mensaje en base de datos
-      await prisma.message.create({
-        data: {
-          direction: "outbound",
-          from: credentials.fromNumber,
-          to: myWhatsAppNumber,
-          body: forwardedBody,
-          twilioSid: message.sid,
-        },
-      });
+      try {
+        const message = await client.messages.create(messageData);
+        
+        // Guardar mensaje en base de datos
+        await prisma.message.create({
+          data: {
+            direction: "outbound",
+            from: credentials.fromNumber,
+            to: myWhatsAppNumber,
+            body: forwardedBody,
+            twilioSid: message.sid,
+          },
+        });
 
-      console.log(`[TWILIO] Mensaje con ${processedUrls.length} imagen(es) reenviado. SID: ${message.sid}`);
+        console.log(`[TWILIO] Mensaje con ${processedUrls.length} imagen(es) reenviado. SID: ${message.sid}`);
+        
+        // Verificar si el mensaje tiene errores relacionados con media
+        if (message.errorCode) {
+          console.warn(`[TWILIO] ⚠️  Mensaje reenviado pero puede tener errores: ${message.errorCode} - ${message.errorMessage}`);
+          console.warn(`[TWILIO] ⚠️  Las imágenes pueden no aparecer si las URLs de Twilio no son accesibles`);
+        }
+      } catch (error: any) {
+        // Si falla al enviar con imágenes, intentar enviar solo texto
+        console.error(`[TWILIO] ❌ Error enviando mensaje con imágenes:`, error.message);
+        console.warn(`[TWILIO] Intentando enviar solo texto...`);
+        await sendWhatsAppMessage({
+          to: myWhatsAppNumber,
+          reminderText: forwardedBody + "\n\n[Nota: Las imágenes no pudieron ser reenviadas - Error: " + error.message + "]",
+        });
+      }
     } else {
       // Solo texto, usar función normal con template
       await sendWhatsAppMessage({
