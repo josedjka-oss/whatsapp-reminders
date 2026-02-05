@@ -387,7 +387,7 @@ export const ReminderForm = () => {
             <div className="grid grid-cols-2 gap-3">
               {[
                 { value: "once", label: "Una vez", icon: "📌" },
-                { value: "daily", label: "Diariamente", icon: "🔄" },
+                { value: "daily", label: "Diariamente (Lun-Sáb)", icon: "🔄" },
                 { value: "weekly", label: "Semanalmente", icon: "📆" },
                 { value: "monthly", label: "Mensual", icon: "🗓️" },
               ].map((option) => (

@@ -65,7 +65,7 @@ export const RemindersList = ({ reminders, type }: RemindersListProps) => {
     } else if (reminder.scheduleType === "daily") {
       const hour = reminder.hour !== null ? String(reminder.hour).padStart(2, "0") : "00";
       const minute = reminder.minute !== null ? String(reminder.minute).padStart(2, "0") : "00";
-      return `Diariamente a las ${hour}:${minute}`;
+      return `Diariamente (Lun-Sáb) a las ${hour}:${minute}`;
     } else if (reminder.scheduleType === "weekly") {
       const daysOfWeek = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
       const dayName = reminder.dayOfWeek !== null ? daysOfWeek[reminder.dayOfWeek] : "Día";

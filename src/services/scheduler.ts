@@ -46,6 +46,11 @@ const shouldSendReminder = async (reminder: any): Promise<boolean> => {
 
     case "daily": {
       if (reminder.hour === null || reminder.minute === null) return false;
+      // Excluir domingos (día 0) - diariamente es de lunes a sábado
+      const nowZoned = toZonedTime(now, reminderTimezone);
+      const currentDayOfWeek = nowZoned.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
+      if (currentDayOfWeek === 0) return false; // No enviar los domingos
+      
       // Usar timezone del recordatorio o el por defecto
       const currentHour = parseInt(formatInTimeZone(now, reminderTimezone, "HH"));
       const currentMinute = parseInt(formatInTimeZone(now, reminderTimezone, "mm"));
