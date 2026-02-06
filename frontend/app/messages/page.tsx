@@ -41,6 +41,8 @@ export default function MessagesPage() {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
+      console.log("[MESSAGES] Datos recibidos:", data);
+      console.log("[MESSAGES] Primer mensaje:", data.messages?.[0]);
       setMessages(data.messages || []);
     } catch (err: any) {
       setError(err.message || "Error al cargar mensajes");
@@ -99,7 +101,12 @@ export default function MessagesPage() {
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="mt-2 text-sm text-gray-500">
-              Mostrando mensajes enviados el: {selectedDate ? format(new Date(selectedDate), "PPP", { locale: es }) : ""}
+              Mostrando mensajes enviados el: {selectedDate ? (() => {
+                // Parsear la fecha correctamente para evitar problemas de zona horaria
+                const [year, month, day] = selectedDate.split("-").map(Number);
+                const date = new Date(year, month - 1, day);
+                return format(date, "PPP", { locale: es });
+              })() : ""}
             </p>
           </div>
 
