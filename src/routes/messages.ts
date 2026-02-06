@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../db";
-import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
+import { fromZonedTime } from "date-fns-tz";
 
 const router = Router();
 
@@ -69,13 +69,13 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     const startOfDayLocal = new Date(year, month - 1, day, 0, 0, 0, 0);
     
     // Convertir a UTC para comparar con createdAt (que está en UTC en la DB)
-    const startOfDay = zonedTimeToUtc(startOfDayLocal, timezone);
+    const startOfDay = fromZonedTime(startOfDayLocal, timezone);
     
     // Crear fecha local en Bogotá (fin del día: 23:59:59.999)
     const endOfDayLocal = new Date(year, month - 1, day, 23, 59, 59, 999);
     
     // Convertir a UTC para comparar con createdAt (que está en UTC en la DB)
-    const endOfDay = zonedTimeToUtc(endOfDayLocal, timezone);
+    const endOfDay = fromZonedTime(endOfDayLocal, timezone);
 
     // Obtener mensajes enviados (outbound) en esa fecha
     const sentMessages = await prisma.message.findMany({
