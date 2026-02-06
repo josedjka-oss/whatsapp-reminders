@@ -91,7 +91,7 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
       },
     });
 
-    // Para cada mensaje enviado, verificar si tuvo respuesta
+    // Para cada mensaje enviado, verificar si tuvo respuesta y buscar el nombre del contacto
     const messagesWithResponseStatus = await Promise.all(
       sentMessages.map(async (sentMessage) => {
         // Buscar si hay mensajes recibidos (inbound) que sean respuestas
@@ -113,9 +113,17 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
           },
         });
 
+        // Buscar el contacto por número de teléfono
+        const contact = await prisma.contact.findUnique({
+          where: {
+            phone: sentMessage.to, // Buscar por el número de destino
+          },
+        });
+
         return {
           id: sentMessage.id,
           to: sentMessage.to,
+          contactName: contact?.name || null, // Nombre del contacto si existe
           body: sentMessage.body,
           createdAt: sentMessage.createdAt,
           twilioSid: sentMessage.twilioSid,

@@ -8,6 +8,7 @@ import { es } from "date-fns/locale/es";
 interface MessageWithResponse {
   id: string;
   to: string;
+  contactName: string | null;
   body: string;
   createdAt: string;
   twilioSid: string | null;
