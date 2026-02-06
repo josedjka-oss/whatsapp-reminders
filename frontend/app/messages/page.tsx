@@ -145,11 +145,11 @@ export default function MessagesPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold text-gray-900">
-                              {message.contactName || formatPhoneNumber(message.to)}
+                              {message.contactName ? message.contactName : formatPhoneNumber(message.to)}
                             </h3>
                             {getResponseBadge(message.hasResponse)}
                           </div>
-                          {!message.contactName && (
+                          {message.contactName && (
                             <p className="text-xs text-gray-400 mb-1">
                               {formatPhoneNumber(message.to)}
                             </p>
