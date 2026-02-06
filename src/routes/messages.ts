@@ -114,11 +114,36 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
         });
 
         // Buscar el contacto por número de teléfono
-        const contact = await prisma.contact.findUnique({
+        // Intentar buscar con el formato exacto primero
+        let contact = await prisma.contact.findUnique({
           where: {
             phone: sentMessage.to, // Buscar por el número de destino
           },
         });
+
+        // Si no se encuentra, intentar buscar sin el prefijo "whatsapp:"
+        if (!contact && sentMessage.to.startsWith("whatsapp:")) {
+          const phoneWithoutPrefix = sentMessage.to.replace("whatsapp:", "");
+          contact = await prisma.contact.findFirst({
+            where: {
+              phone: {
+                contains: phoneWithoutPrefix, // Buscar parcialmente
+              },
+            },
+          });
+        }
+
+        // Si aún no se encuentra, intentar buscar con el número sin el prefijo
+        if (!contact) {
+          const phoneWithoutPrefix = sentMessage.to.replace(/^whatsapp:/, "");
+          contact = await prisma.contact.findFirst({
+            where: {
+              phone: {
+                endsWith: phoneWithoutPrefix, // Buscar que termine con el número
+              },
+            },
+          });
+        }
 
         const result = {
           id: sentMessage.id,
