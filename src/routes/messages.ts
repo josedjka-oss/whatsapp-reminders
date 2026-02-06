@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../db";
+import { zonedTimeToUtc, utcToZonedTime } from "date-fns-tz";
 
 const router = Router();
 
@@ -57,19 +58,24 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     }
 
     // Parsear la fecha (formato: YYYY-MM-DD)
-    const selectedDate = new Date(date as string);
-    if (isNaN(selectedDate.getTime())) {
-      return res.status(400).json({
-        error: "Formato de fecha inválido. Use YYYY-MM-DD",
-      });
-    }
-
-    // Obtener inicio y fin del día en UTC
-    const startOfDay = new Date(selectedDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    // La fecha viene como "2026-02-06" y debe interpretarse en la zona horaria de Bogotá
+    const timezone = process.env.APP_TIMEZONE || "America/Bogota";
     
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Crear fecha en la zona horaria local (Bogotá) para el inicio del día
+    const dateString = date as string; // "2026-02-06"
+    const [year, month, day] = dateString.split("-").map(Number);
+    
+    // Crear fecha local en Bogotá (inicio del día: 00:00:00)
+    const startOfDayLocal = new Date(year, month - 1, day, 0, 0, 0, 0);
+    
+    // Convertir a UTC para comparar con createdAt (que está en UTC en la DB)
+    const startOfDay = zonedTimeToUtc(startOfDayLocal, timezone);
+    
+    // Crear fecha local en Bogotá (fin del día: 23:59:59.999)
+    const endOfDayLocal = new Date(year, month - 1, day, 23, 59, 59, 999);
+    
+    // Convertir a UTC para comparar con createdAt (que está en UTC en la DB)
+    const endOfDay = zonedTimeToUtc(endOfDayLocal, timezone);
 
     // Obtener mensajes enviados (outbound) en esa fecha
     const sentMessages = await prisma.message.findMany({
