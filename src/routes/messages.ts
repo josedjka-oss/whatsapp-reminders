@@ -120,7 +120,7 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
           },
         });
 
-        return {
+        const result = {
           id: sentMessage.id,
           to: sentMessage.to,
           contactName: contact?.name || null, // Nombre del contacto si existe
@@ -130,6 +130,13 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
           hasResponse: !!response, // true si hay respuesta, false si no
           responseAt: response?.createdAt || null, // Fecha de la respuesta (si existe)
         };
+
+        // Log para debugging
+        if (contact) {
+          console.log(`[MESSAGES] Contacto encontrado para ${sentMessage.to}: ${contact.name}`);
+        }
+
+        return result;
       })
     );
 
