@@ -17,7 +17,7 @@ import { startScheduler } from "./services/scheduler";
 // Cargar variables de entorno
 dotenv.config();
 
-// Trigger redeploy - Webhook configurado
+// Trigger redeploy - Endpoint sent-by-date agregado
 
 const app = express();
 
