@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Proxy endpoint para /api/messages/sent-by-date
  * GET: Obtiene mensajes enviados en una fecha específica con información de respuestas
+ * 
+ * Este endpoint actúa como proxy entre el frontend (Vercel) y el backend (Render)
  */
 export async function GET(request: NextRequest) {
   try {
