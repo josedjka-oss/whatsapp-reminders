@@ -6,6 +6,10 @@ import { NextRequest, NextResponse } from "next/server";
  * 
  * Este endpoint actúa como proxy entre el frontend (Vercel) y el backend (Render)
  */
+
+// Forzar renderizado dinámico (no estático) porque usamos request.url
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
