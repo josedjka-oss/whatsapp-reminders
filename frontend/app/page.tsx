@@ -19,7 +19,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Crear Recordatorio */}
           <button
             onClick={() => router.push("/reminders/new")}
@@ -27,7 +27,7 @@ export default function DashboardPage() {
           >
             <div className="text-5xl mb-4">📅</div>
             <h2 className="text-2xl font-bold mb-2">Crear Recordatorio</h2>
-            <p className="text-blue-100">
+            <p className="text-blue-100 text-sm">
               Programa un mensaje para enviar en una fecha y hora específica
             </p>
           </button>
@@ -39,25 +39,33 @@ export default function DashboardPage() {
           >
             <div className="text-5xl mb-4">📋</div>
             <h2 className="text-2xl font-bold mb-2">Ver Recordatorios</h2>
-            <p className="text-purple-100">
+            <p className="text-purple-100 text-sm">
               Consulta, edita o elimina tus recordatorios programados
+            </p>
+          </button>
+
+          {/* Mensajes Enviados */}
+          <button
+            onClick={() => router.push("/messages")}
+            className="bg-gradient-to-br from-green-500 to-green-600 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+          >
+            <div className="text-5xl mb-4">📨</div>
+            <h2 className="text-2xl font-bold mb-2">Mensajes Enviados</h2>
+            <p className="text-green-100 text-sm">
+              Consulta los mensajes enviados y si tuvieron respuesta
             </p>
           </button>
 
           {/* Agregar Contacto */}
           <button
             onClick={() => router.push("/contacts/new")}
-            className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 md:col-span-2"
+            className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
           >
-            <div className="flex items-center justify-center gap-4">
-              <div className="text-5xl">➕</div>
-              <div className="text-left">
-                <h2 className="text-2xl font-bold mb-2">Agregar Contacto</h2>
-                <p className="text-orange-100">
-                  Guarda números de teléfono con nombres para usarlos fácilmente
-                </p>
-              </div>
-            </div>
+            <div className="text-5xl mb-4">➕</div>
+            <h2 className="text-2xl font-bold mb-2">Agregar Contacto</h2>
+            <p className="text-orange-100 text-sm">
+              Guarda números de teléfono con nombres para usarlos fácilmente
+            </p>
           </button>
         </div>
 
