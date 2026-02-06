@@ -295,9 +295,14 @@ export const forwardToMyWhatsApp = async (
         return;
       }
 
-      // Construir mensaje con media - WhatsApp Business API requiere formato específico
-      // Para mensajes con media, usar body (opcional) + mediaUrl (array de URLs)
-      // NOTA: El body puede estar vacío si solo enviamos la imagen
+      // IMPORTANTE: WhatsApp Business API solo permite mensajes libres dentro de 24 horas
+      // Después de ese tiempo, DEBEMOS usar templates aprobados
+      // Para mensajes con imágenes, intentamos enviar solo las imágenes primero
+      // Si falla, usamos el template para el texto y mencionamos las imágenes como URLs
+      
+      console.log(`[TWILIO] Intentando enviar ${processedUrls.length} imagen(es) con texto...`);
+      
+      // Intentar enviar imágenes con texto usando body (solo funciona dentro de 24 horas)
       const messageData: any = {
         from: credentials.fromNumber,
         to: myWhatsAppNumber,
@@ -309,14 +314,11 @@ export const forwardToMyWhatsApp = async (
       }
 
       // Agregar URLs procesadas al mensaje (formato: mediaUrl como array)
-      // WhatsApp Business API requiere que las URLs sean públicas y accesibles
-      // Para múltiples imágenes, usar array. Para una sola, también puede ser array.
       messageData.mediaUrl = processedUrls;
 
       console.log(`[TWILIO] Enviando mensaje con ${processedUrls.length} imagen(es)...`);
       console.log(`[TWILIO] mediaUrl (array):`, JSON.stringify(processedUrls));
       console.log(`[TWILIO] Body: ${forwardedBody ? forwardedBody.substring(0, 50) + '...' : '(vacío)'}`);
-      console.log(`[TWILIO] MessageData completo:`, JSON.stringify(messageData, null, 2));
 
       try {
         const message = await client.messages.create(messageData);
@@ -325,6 +327,11 @@ export const forwardToMyWhatsApp = async (
         console.log(`[TWILIO] Estado: ${message.status}`);
         console.log(`[TWILIO] ErrorCode: ${message.errorCode || 'ninguno'}`);
         console.log(`[TWILIO] ErrorMessage: ${message.errorMessage || 'ninguno'}`);
+        
+        // Si hay error 63016 (fuera de ventana de 24 horas), usar template
+        if (message.errorCode === 63016 || message.status === "failed") {
+          throw new Error(`Error ${message.errorCode}: ${message.errorMessage || 'Fuera de ventana de 24 horas'}`);
+        }
         
         // Guardar mensaje en base de datos
         await prisma.message.create({
@@ -337,24 +344,25 @@ export const forwardToMyWhatsApp = async (
           },
         });
 
-        console.log(`[TWILIO] Mensaje con ${processedUrls.length} imagen(es) reenviado. SID: ${message.sid}`);
+        console.log(`[TWILIO] ✅ Mensaje con ${processedUrls.length} imagen(es) reenviado. SID: ${message.sid}`);
         
-        // Verificar si el mensaje tiene errores relacionados con media
-        if (message.errorCode) {
-          console.warn(`[TWILIO] ⚠️  Mensaje reenviado pero tiene errores: ${message.errorCode} - ${message.errorMessage}`);
-          console.warn(`[TWILIO] ⚠️  Las imágenes pueden no aparecer. Revisa la URL de imgbb: ${processedUrls[0]}`);
-        } else {
-          console.log(`[TWILIO] ✅ Mensaje enviado sin errores. La imagen debería aparecer.`);
-        }
       } catch (error: any) {
-        // Si falla al enviar con imágenes, intentar enviar solo texto
-        console.error(`[TWILIO] ❌ Error enviando mensaje con imágenes:`, error.message);
-        console.error(`[TWILIO] Stack trace:`, error.stack);
-        console.warn(`[TWILIO] Intentando enviar solo texto...`);
+        // Si falla (probablemente error 63016 - fuera de ventana de 24 horas)
+        // Usar template aprobado con el texto y URLs de las imágenes
+        console.warn(`[TWILIO] ⚠️  Error enviando mensaje libre con imágenes: ${error.message}`);
+        console.warn(`[TWILIO] ⚠️  Probablemente fuera de ventana de 24 horas. Usando template aprobado...`);
+        
+        // Construir mensaje con URLs de imágenes incluidas en el texto
+        const imageUrlsText = processedUrls.map((url, idx) => `Imagen ${idx + 1}: ${url}`).join('\n');
+        const templateBody = `${forwardedBody}\n\n📷 Imágenes adjuntas:\n${imageUrlsText}`;
+        
+        // Usar template aprobado (siempre funciona, incluso después de 24 horas)
         await sendWhatsAppMessage({
           to: myWhatsAppNumber,
-          reminderText: forwardedBody + "\n\n[Nota: Las imágenes no pudieron ser reenviadas - Error: " + error.message + "]",
+          reminderText: templateBody,
         });
+        
+        console.log(`[TWILIO] ✅ Mensaje reenviado usando template aprobado (con URLs de imágenes en el texto)`);
       }
     } else {
       // Solo texto, usar función normal con template
