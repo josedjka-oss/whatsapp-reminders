@@ -119,6 +119,12 @@ export const sendWhatsAppMessage = async ({
     console.log(`[TWILIO] Número destino final: ${message.to}`);
     console.log(`[TWILIO] Número origen final: ${message.from}`);
     
+    // Verificar si hay errores después de crear el mensaje
+    if (message.errorCode) {
+      console.error(`[TWILIO] ❌ Error en mensaje: ${message.errorCode} - ${message.errorMessage}`);
+      throw new Error(`Error ${message.errorCode}: ${message.errorMessage || 'Error desconocido'}`);
+    }
+    
     // Verificar si hay errores en el mensaje
     if (message.errorCode || message.errorMessage) {
       console.error(`[TWILIO] ❌ Error en mensaje: ${message.errorCode} - ${message.errorMessage}`);
