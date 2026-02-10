@@ -77,7 +77,14 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     // Convertir a UTC para comparar con createdAt (que está en UTC en la DB)
     const endOfDay = fromZonedTime(endOfDayLocal, timezone);
 
+    // Obtener el número personal para filtrar mensajes de reenvío interno
+    const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER?.trim();
+    const myWhatsAppNumberFormatted = myWhatsAppNumber 
+      ? (myWhatsAppNumber.startsWith("whatsapp:") ? myWhatsAppNumber : `whatsapp:${myWhatsAppNumber}`)
+      : null;
+
     // Obtener mensajes enviados (outbound) en esa fecha
+    // Excluir mensajes reenviados al número personal (son internos, no necesitan mostrarse)
     const sentMessages = await prisma.message.findMany({
       where: {
         direction: "outbound",
@@ -85,6 +92,12 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
           gte: startOfDay,
           lte: endOfDay,
         },
+        // Excluir mensajes enviados al número personal (reenvíos internos)
+        ...(myWhatsAppNumberFormatted ? {
+          NOT: {
+            to: myWhatsAppNumberFormatted,
+          },
+        } : {}),
       },
       orderBy: {
         createdAt: "asc",
