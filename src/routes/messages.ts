@@ -48,10 +48,14 @@ router.get("/", async (req: Request, res: Response) => {
  * GET /api/messages/sent-by-date?date=2026-02-05
  */
 router.get("/sent-by-date", async (req: Request, res: Response) => {
+  console.log(`[MESSAGES] ===== ENDPOINT LLAMADO =====`);
+  console.log(`[MESSAGES] Query params:`, req.query);
+  
   try {
     const { date } = req.query;
 
     if (!date) {
+      console.log(`[MESSAGES] ❌ Error: fecha no proporcionada`);
       return res.status(400).json({
         error: "El parámetro 'date' es requerido (formato: YYYY-MM-DD)",
       });
