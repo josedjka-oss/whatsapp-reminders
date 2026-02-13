@@ -113,7 +113,49 @@ router.get("/", async (req: Request, res: Response) => {
       },
     });
 
-    return res.json(reminders);
+    // Para cada recordatorio, buscar el nombre del contacto
+    const remindersWithContactNames = await Promise.all(
+      reminders.map(async (reminder) => {
+        // Buscar el contacto por número de teléfono
+        // Intentar buscar con el formato exacto primero
+        let contact = await prisma.contact.findUnique({
+          where: {
+            phone: reminder.to, // Buscar por el número de destino
+          },
+        });
+
+        // Si no se encuentra, intentar buscar sin el prefijo "whatsapp:"
+        if (!contact && reminder.to.startsWith("whatsapp:")) {
+          const phoneWithoutPrefix = reminder.to.replace("whatsapp:", "");
+          contact = await prisma.contact.findFirst({
+            where: {
+              phone: {
+                contains: phoneWithoutPrefix, // Buscar parcialmente
+              },
+            },
+          });
+        }
+
+        // Si aún no se encuentra, intentar buscar con el número sin el prefijo
+        if (!contact) {
+          const phoneWithoutPrefix = reminder.to.replace(/^whatsapp:/, "");
+          contact = await prisma.contact.findFirst({
+            where: {
+              phone: {
+                endsWith: phoneWithoutPrefix, // Buscar que termine con el número
+              },
+            },
+          });
+        }
+
+        return {
+          ...reminder,
+          contactName: contact?.name || null, // Nombre del contacto si existe
+        };
+      })
+    );
+
+    return res.json(remindersWithContactNames);
   } catch (error: any) {
     console.error("Error listando recordatorios:", error);
     return res.status(500).json({

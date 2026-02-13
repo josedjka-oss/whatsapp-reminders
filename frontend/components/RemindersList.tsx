@@ -20,6 +20,7 @@ interface Reminder {
   lastRunAt: string | null;
   createdAt: string;
   updatedAt: string;
+  contactName: string | null;
 }
 
 interface RemindersListProps {
@@ -147,10 +148,15 @@ export const RemindersList = ({ reminders, type }: RemindersListProps) => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="font-semibold text-gray-900">
-                    {formatPhoneNumber(reminder.to)}
+                    {reminder.contactName || formatPhoneNumber(reminder.to)}
                   </h3>
                   {getStatusBadge(reminder)}
                 </div>
+                {reminder.contactName && (
+                  <p className="text-xs text-gray-400 mb-1">
+                    {formatPhoneNumber(reminder.to)}
+                  </p>
+                )}
                 <p className="text-gray-700 text-sm mb-2">{reminder.body}</p>
               </div>
               {reminder.isActive && type === "scheduled" && (

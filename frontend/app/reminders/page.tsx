@@ -19,6 +19,7 @@ interface Reminder {
   lastRunAt: string | null;
   createdAt: string;
   updatedAt: string;
+  contactName: string | null;
 }
 
 export default function RemindersPage() {
@@ -51,13 +52,15 @@ export default function RemindersPage() {
     }
   };
 
-  // Filtrar recordatorios según el tab activo
+  // Filtrar y ordenar recordatorios según el tab activo
   const getFilteredReminders = (): Reminder[] => {
     const now = new Date();
 
+    let filtered: Reminder[];
+
     if (activeTab === "past") {
       // Recordatorios pasados: inactivos o con sendAt en el pasado
-      return reminders.filter((r) => {
+      filtered = reminders.filter((r) => {
         if (!r.isActive) return true;
         if (r.scheduleType === "once" && r.sendAt) {
           return new Date(r.sendAt) < now;
@@ -66,7 +69,7 @@ export default function RemindersPage() {
       });
     } else {
       // Recordatorios programados: activos y con fecha futura o recurrentes
-      return reminders.filter((r) => {
+      filtered = reminders.filter((r) => {
         if (!r.isActive) return false;
         if (r.scheduleType === "once" && r.sendAt) {
           return new Date(r.sendAt) >= now;
@@ -75,6 +78,29 @@ export default function RemindersPage() {
         return r.scheduleType === "daily" || r.scheduleType === "weekly" || r.scheduleType === "monthly";
       });
     }
+
+    // Ordenar por fecha: más recientes arriba
+    // Para "once": usar sendAt
+    // Para recurrentes: usar createdAt (fecha de creación)
+    return filtered.sort((a, b) => {
+      let dateA: Date;
+      let dateB: Date;
+
+      if (a.scheduleType === "once" && a.sendAt) {
+        dateA = new Date(a.sendAt);
+      } else {
+        dateA = new Date(a.createdAt);
+      }
+
+      if (b.scheduleType === "once" && b.sendAt) {
+        dateB = new Date(b.sendAt);
+      } else {
+        dateB = new Date(b.createdAt);
+      }
+
+      // Ordenar descendente (más recientes primero)
+      return dateB.getTime() - dateA.getTime();
+    });
   };
 
   const filteredReminders = getFilteredReminders();
