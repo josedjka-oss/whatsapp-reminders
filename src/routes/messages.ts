@@ -58,33 +58,46 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     }
 
     // Parsear la fecha (formato: YYYY-MM-DD)
-    // La fecha viene como "2026-02-06" y debe interpretarse en la zona horaria de Bogotá
+    // La fecha viene como "2026-02-13" y debe interpretarse en la zona horaria de Bogotá
     const timezone = process.env.APP_TIMEZONE || "America/Bogota";
     
     // Parsear la fecha
-    const dateString = date as string; // "2026-02-06"
+    const dateString = date as string; // "2026-02-13"
     const [year, month, day] = dateString.split("-").map(Number);
     
-    // Crear strings ISO para el inicio y fin del día en la zona horaria de Bogotá
-    // Formato: "YYYY-MM-DDTHH:mm:ss" (sin Z, para que fromZonedTime lo interprete como hora local)
-    const startOfDayString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`;
-    const endOfDayString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999`;
+    // Crear fechas en la zona horaria de Bogotá usando Date.UTC y luego ajustar
+    // Bogotá está en UTC-5, así que necesitamos ajustar
+    // Crear fecha como si fuera en Bogotá: año, mes, día, hora, minuto, segundo
+    // Usar Date.UTC para crear una fecha UTC, luego restar 5 horas para obtener la hora de Bogotá
+    // Pero mejor: crear la fecha directamente interpretándola como hora local de Bogotá
     
-    // Crear objetos Date desde los strings (se interpretarán como UTC, pero los trataremos como hora local de Bogotá)
-    const startOfDayLocal = new Date(startOfDayString);
-    const endOfDayLocal = new Date(endOfDayString);
+    // Método más simple: crear la fecha en UTC pero interpretarla como si fuera en Bogotá
+    // Bogotá es UTC-5, así que cuando son las 00:00 en Bogotá, son las 05:00 UTC
+    // Por lo tanto, para el inicio del día en Bogotá, necesitamos buscar desde las 05:00 UTC del día anterior
+    // hasta las 04:59:59.999 UTC del día siguiente
     
-    // Convertir de zona horaria de Bogotá a UTC usando fromZonedTime
-    // fromZonedTime toma una fecha y la interpreta como si fuera en la zona horaria especificada,
-    // luego la convierte a UTC
+    // Crear fecha UTC para el inicio del día solicitado
+    const startOfDayUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endOfDayUTC = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    
+    // Ahora necesitamos convertir estas fechas UTC a la hora local de Bogotá
+    // y luego volver a UTC para comparar con createdAt
+    // fromZonedTime interpreta una fecha como si fuera en la zona horaria especificada
+    // y la convierte a UTC
+    
+    // Crear fechas locales (interpretadas como hora local de Bogotá)
+    const startOfDayLocal = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const endOfDayLocal = new Date(year, month - 1, day, 23, 59, 59, 999);
+    
+    // Convertir usando fromZonedTime: interpreta la fecha como si fuera en Bogotá y la convierte a UTC
     const startOfDay = fromZonedTime(startOfDayLocal, timezone);
     const endOfDay = fromZonedTime(endOfDayLocal, timezone);
     
     // Log para debugging
     console.log(`[MESSAGES] Filtrando mensajes para fecha: ${dateString} (${timezone})`);
-    console.log(`[MESSAGES] Fecha local inicio: ${startOfDayLocal.toISOString()}`);
-    console.log(`[MESSAGES] Fecha local fin: ${endOfDayLocal.toISOString()}`);
-    console.log(`[MESSAGES] Rango UTC: ${startOfDay.toISOString()} - ${endOfDay.toISOString()}`);
+    console.log(`[MESSAGES] Fecha local inicio (Bogotá): ${startOfDayLocal.toISOString()}`);
+    console.log(`[MESSAGES] Fecha local fin (Bogotá): ${endOfDayLocal.toISOString()}`);
+    console.log(`[MESSAGES] Rango UTC convertido: ${startOfDay.toISOString()} - ${endOfDay.toISOString()}`);
     
     // Log adicional: mostrar algunos mensajes para verificar
     const allMessages = await prisma.message.findMany({
@@ -94,11 +107,14 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
       orderBy: {
         createdAt: "desc",
       },
-      take: 5,
+      take: 10,
     });
-    console.log(`[MESSAGES] Últimos 5 mensajes en DB:`);
+    console.log(`[MESSAGES] Últimos 10 mensajes en DB (total: ${allMessages.length}):`);
     allMessages.forEach((msg, idx) => {
-      console.log(`[MESSAGES] ${idx + 1}. createdAt: ${msg.createdAt.toISOString()}, to: ${msg.to}`);
+      const msgDate = new Date(msg.createdAt);
+      const msgDateStr = msgDate.toISOString().split('T')[0];
+      const isInRange = msg.createdAt >= startOfDay && msg.createdAt <= endOfDay;
+      console.log(`[MESSAGES] ${idx + 1}. createdAt: ${msg.createdAt.toISOString()} (fecha: ${msgDateStr}), to: ${msg.to}, en rango: ${isInRange}`);
     });
 
     // Obtener el número personal para filtrar mensajes de reenvío interno
