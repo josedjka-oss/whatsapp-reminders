@@ -159,33 +159,80 @@ export const sendWhatsAppMessage = async ({
 
 /**
  * Descarga una imagen desde una URL de Twilio usando autenticación
+ * Con reintentos automáticos en caso de fallo
  */
-const downloadTwilioMedia = async (mediaUrl: string, accountSid: string, authToken: string): Promise<{ buffer: Buffer; contentType: string }> => {
+const downloadTwilioMedia = async (
+  mediaUrl: string,
+  accountSid: string,
+  authToken: string,
+  maxRetries: number = 3
+): Promise<{ buffer: Buffer; contentType: string }> => {
   // Crear credenciales Base64 para autenticación HTTP Basic
   const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
   
-  const response = await fetch(mediaUrl, {
-    headers: {
-      Authorization: `Basic ${credentials}`,
-    },
-  });
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[TWILIO] Intento ${attempt}/${maxRetries} descargando media desde Twilio...`);
+      
+      // Timeout de 30 segundos para la descarga
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      const response = await fetch(mediaUrl, {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
 
-  if (!response.ok) {
-    throw new Error(`Error descargando media: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`Error descargando media: ${response.status} ${response.statusText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+
+      console.log(`[TWILIO] ✅ Media descargado exitosamente: ${arrayBuffer.byteLength} bytes, tipo: ${contentType}`);
+      
+      return {
+        buffer: Buffer.from(arrayBuffer),
+        contentType,
+      };
+    } catch (error: any) {
+      lastError = error;
+      const isLastAttempt = attempt === maxRetries;
+      
+      if (error.name === 'AbortError') {
+        console.error(`[TWILIO] ⏱️ Timeout descargando media (intento ${attempt}/${maxRetries})`);
+      } else {
+        console.error(`[TWILIO] ❌ Error descargando media (intento ${attempt}/${maxRetries}):`, error.message);
+      }
+      
+      if (!isLastAttempt) {
+        // Backoff exponencial: 2s, 4s, 8s
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`[TWILIO] ⏳ Reintentando en ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
-
-  const contentType = response.headers.get("content-type") || "image/jpeg";
-  const arrayBuffer = await response.arrayBuffer();
-  return {
-    buffer: Buffer.from(arrayBuffer),
-    contentType,
-  };
+  
+  throw new Error(`Error descargando media después de ${maxRetries} intentos: ${lastError?.message || 'Error desconocido'}`);
 };
 
 /**
  * Sube una imagen a imgbb y retorna la URL pública
+ * Con reintentos automáticos en caso de fallo
  */
-const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<string> => {
+const uploadToImgbb = async (
+  imageBuffer: Buffer,
+  contentType: string,
+  maxRetries: number = 3
+): Promise<string> => {
   const imgbbApiKey = process.env.IMGBB_API_KEY?.trim();
   
   if (!imgbbApiKey) {
@@ -195,41 +242,72 @@ const uploadToImgbb = async (imageBuffer: Buffer, contentType: string): Promise<
   // Convertir buffer a base64
   const base64Image = imageBuffer.toString("base64");
   
-  // Crear FormData para la petición
-  const formData = new URLSearchParams();
-  formData.append("key", imgbbApiKey);
-  formData.append("image", base64Image);
-
-  console.log(`[IMGBB] Subiendo imagen a imgbb (${imageBuffer.length} bytes, tipo: ${contentType})...`);
-
-  const response = await fetch("https://api.imgbb.com/1/upload", {
-    method: "POST",
-    body: formData,
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Error subiendo a imgbb: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const data = await response.json() as {
-    success: boolean;
-    data?: {
-      url?: string;
-    };
-  };
+  let lastError: Error | null = null;
   
-  if (!data.success || !data.data || !data.data.url) {
-    throw new Error(`Error en respuesta de imgbb: ${JSON.stringify(data)}`);
-  }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[IMGBB] Intento ${attempt}/${maxRetries} subiendo imagen a imgbb (${imageBuffer.length} bytes, tipo: ${contentType})...`);
+      
+      // Crear FormData para la petición
+      const formData = new URLSearchParams();
+      formData.append("key", imgbbApiKey);
+      formData.append("image", base64Image);
 
-  const publicUrl = data.data.url;
-  console.log(`[IMGBB] ✅ Imagen subida exitosamente. URL pública: ${publicUrl}`);
+      // Timeout de 30 segundos para la subida
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch("https://api.imgbb.com/1/upload", {
+        method: "POST",
+        body: formData,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error subiendo a imgbb: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json() as {
+        success: boolean;
+        data?: {
+          url?: string;
+        };
+      };
+      
+      if (!data.success || !data.data || !data.data.url) {
+        throw new Error(`Error en respuesta de imgbb: ${JSON.stringify(data)}`);
+      }
+
+      const publicUrl = data.data.url;
+      console.log(`[IMGBB] ✅ Imagen subida exitosamente: ${publicUrl}`);
+      
+      return publicUrl;
+    } catch (error: any) {
+      lastError = error;
+      const isLastAttempt = attempt === maxRetries;
+      
+      if (error.name === 'AbortError') {
+        console.error(`[IMGBB] ⏱️ Timeout subiendo a imgbb (intento ${attempt}/${maxRetries})`);
+      } else {
+        console.error(`[IMGBB] ❌ Error subiendo a imgbb (intento ${attempt}/${maxRetries}):`, error.message);
+      }
+      
+      if (!isLastAttempt) {
+        // Backoff exponencial: 2s, 4s, 8s
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`[IMGBB] ⏳ Reintentando en ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
   
-  return publicUrl;
+  throw new Error(`Error subiendo a imgbb después de ${maxRetries} intentos: ${lastError?.message || 'Error desconocido'}`);
 };
 
 /**
