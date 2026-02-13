@@ -61,31 +61,17 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     // La fecha viene como "2026-02-13" y debe interpretarse en la zona horaria de Bogotá
     const timezone = process.env.APP_TIMEZONE || "America/Bogota";
     
+    console.log(`[MESSAGES] ===== Iniciando consulta de mensajes =====`);
+    console.log(`[MESSAGES] Fecha solicitada: ${date}`);
+    console.log(`[MESSAGES] Timezone: ${timezone}`);
+    
     // Parsear la fecha
     const dateString = date as string; // "2026-02-13"
     const [year, month, day] = dateString.split("-").map(Number);
     
-    // Crear fechas en la zona horaria de Bogotá usando Date.UTC y luego ajustar
-    // Bogotá está en UTC-5, así que necesitamos ajustar
-    // Crear fecha como si fuera en Bogotá: año, mes, día, hora, minuto, segundo
-    // Usar Date.UTC para crear una fecha UTC, luego restar 5 horas para obtener la hora de Bogotá
-    // Pero mejor: crear la fecha directamente interpretándola como hora local de Bogotá
-    
-    // Método más simple: crear la fecha en UTC pero interpretarla como si fuera en Bogotá
-    // Bogotá es UTC-5, así que cuando son las 00:00 en Bogotá, son las 05:00 UTC
-    // Por lo tanto, para el inicio del día en Bogotá, necesitamos buscar desde las 05:00 UTC del día anterior
-    // hasta las 04:59:59.999 UTC del día siguiente
-    
-    // Crear fecha UTC para el inicio del día solicitado
-    const startOfDayUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    const endOfDayUTC = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-    
-    // Ahora necesitamos convertir estas fechas UTC a la hora local de Bogotá
-    // y luego volver a UTC para comparar con createdAt
-    // fromZonedTime interpreta una fecha como si fuera en la zona horaria especificada
-    // y la convierte a UTC
-    
     // Crear fechas locales (interpretadas como hora local de Bogotá)
+    // new Date(year, month-1, day, hour, minute, second) crea una fecha en la zona horaria local del servidor
+    // Pero necesitamos interpretarla como si fuera en Bogotá
     const startOfDayLocal = new Date(year, month - 1, day, 0, 0, 0, 0);
     const endOfDayLocal = new Date(year, month - 1, day, 23, 59, 59, 999);
     
@@ -94,7 +80,6 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     const endOfDay = fromZonedTime(endOfDayLocal, timezone);
     
     // Log para debugging
-    console.log(`[MESSAGES] Filtrando mensajes para fecha: ${dateString} (${timezone})`);
     console.log(`[MESSAGES] Fecha local inicio (Bogotá): ${startOfDayLocal.toISOString()}`);
     console.log(`[MESSAGES] Fecha local fin (Bogotá): ${endOfDayLocal.toISOString()}`);
     console.log(`[MESSAGES] Rango UTC convertido: ${startOfDay.toISOString()} - ${endOfDay.toISOString()}`);
@@ -109,7 +94,7 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
       },
       take: 10,
     });
-    console.log(`[MESSAGES] Últimos 10 mensajes en DB (total: ${allMessages.length}):`);
+    console.log(`[MESSAGES] Últimos 10 mensajes en DB (total encontrados: ${allMessages.length}):`);
     allMessages.forEach((msg, idx) => {
       const msgDate = new Date(msg.createdAt);
       const msgDateStr = msgDate.toISOString().split('T')[0];
