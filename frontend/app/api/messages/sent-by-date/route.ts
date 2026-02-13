@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 // Forzar renderizado dinámico (no estático) porque usamos request.url
 export const dynamic = 'force-dynamic';
 
+console.log('[MESSAGES PROXY] Route handler cargado');
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -48,11 +50,14 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("[MESSAGES PROXY] Llamando a:", `${backendUrl}/api/messages/sent-by-date?date=${date}`);
+    console.log("[MESSAGES PROXY] Headers:", JSON.stringify(headers));
 
     const response = await fetch(`${backendUrl}/api/messages/sent-by-date?date=${date}`, {
       method: "GET",
       headers,
     });
+
+    console.log("[MESSAGES PROXY] Respuesta recibida:", response.status, response.statusText);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -66,6 +71,11 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log("[MESSAGES PROXY] Datos recibidos del backend:", {
+      date: data.date,
+      count: data.count,
+      messagesCount: data.messages?.length || 0,
+    });
     return NextResponse.json(data);
   } catch (error: any) {
     console.error("[MESSAGES PROXY] Error:", error);
