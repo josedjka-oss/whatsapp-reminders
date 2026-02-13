@@ -125,24 +125,35 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
 
     // Obtener mensajes enviados (outbound) en esa fecha
     // Excluir mensajes reenviados al número personal (son internos, no necesitan mostrarse)
-    const sentMessages = await prisma.message.findMany({
-      where: {
-        direction: "outbound",
-        createdAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-        // Excluir mensajes enviados al número personal (reenvíos internos)
-        ...(myWhatsAppNumberFormatted ? {
-          NOT: {
-            to: myWhatsAppNumberFormatted,
-          },
-        } : {}),
+    const whereClause: any = {
+      direction: "outbound",
+      createdAt: {
+        gte: startOfDay,
+        lte: endOfDay,
       },
+    };
+    
+    // Excluir mensajes enviados al número personal (reenvíos internos)
+    if (myWhatsAppNumberFormatted) {
+      whereClause.NOT = {
+        to: myWhatsAppNumberFormatted,
+      };
+      console.log(`[MESSAGES] Filtrando mensajes reenviados al número personal: ${myWhatsAppNumberFormatted}`);
+    }
+    
+    console.log(`[MESSAGES] Consultando mensajes con whereClause:`, JSON.stringify(whereClause, null, 2));
+    
+    const sentMessages = await prisma.message.findMany({
+      where: whereClause,
       orderBy: {
         createdAt: "asc",
       },
     });
+    
+    console.log(`[MESSAGES] Mensajes encontrados después del filtro: ${sentMessages.length}`);
+    if (sentMessages.length > 0) {
+      console.log(`[MESSAGES] Primer mensaje encontrado: createdAt=${sentMessages[0].createdAt.toISOString()}, to=${sentMessages[0].to}`);
+    }
 
     // Para cada mensaje enviado, verificar si tuvo respuesta y buscar el nombre del contacto
     const messagesWithResponseStatus = await Promise.all(
