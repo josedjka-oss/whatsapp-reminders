@@ -118,37 +118,62 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
       ? (myWhatsAppNumber.startsWith("whatsapp:") ? myWhatsAppNumber : `whatsapp:${myWhatsAppNumber}`)
       : null;
 
-    // Obtener mensajes enviados (outbound) en esa fecha
-    // Excluir mensajes reenviados al número personal (son internos, no necesitan mostrarse)
-    const whereClause: any = {
-      direction: "outbound",
-      createdAt: {
-        gte: startOfDay,
-        lte: endOfDay,
+    // Obtener TODOS los mensajes enviados (outbound) primero, luego filtrar en memoria
+    // Esto nos permite ver exactamente qué mensajes hay y por qué no están siendo encontrados
+    console.log(`[MESSAGES] Obteniendo todos los mensajes outbound...`);
+    
+    const allOutboundMessages = await prisma.message.findMany({
+      where: {
+        direction: "outbound",
       },
-    };
-    
-    // Excluir mensajes enviados al número personal (reenvíos internos)
-    if (myWhatsAppNumberFormatted) {
-      whereClause.NOT = {
-        to: myWhatsAppNumberFormatted,
-      };
-      console.log(`[MESSAGES] Filtrando mensajes reenviados al número personal: ${myWhatsAppNumberFormatted}`);
-    }
-    
-    console.log(`[MESSAGES] Consultando mensajes con whereClause:`, JSON.stringify(whereClause, null, 2));
-    
-    const sentMessages = await prisma.message.findMany({
-      where: whereClause,
       orderBy: {
-        createdAt: "asc",
+        createdAt: "desc",
       },
+    });
+    
+    console.log(`[MESSAGES] Total de mensajes outbound en DB: ${allOutboundMessages.length}`);
+    
+    // Filtrar en memoria por fecha y número personal
+    const sentMessages = allOutboundMessages.filter((msg) => {
+      // Filtrar por fecha (en rango UTC)
+      const inDateRange = msg.createdAt >= startOfDay && msg.createdAt <= endOfDay;
+      
+      // Filtrar por número personal (excluir reenvíos internos)
+      const isNotPersonalForward = !myWhatsAppNumberFormatted || msg.to !== myWhatsAppNumberFormatted;
+      
+      const shouldInclude = inDateRange && isNotPersonalForward;
+      
+      if (!shouldInclude && inDateRange) {
+        console.log(`[MESSAGES] Mensaje excluido (reenvío interno): createdAt=${msg.createdAt.toISOString()}, to=${msg.to}`);
+      }
+      
+      return shouldInclude;
     });
     
     console.log(`[MESSAGES] Mensajes encontrados después del filtro: ${sentMessages.length}`);
     if (sentMessages.length > 0) {
       console.log(`[MESSAGES] Primer mensaje encontrado: createdAt=${sentMessages[0].createdAt.toISOString()}, to=${sentMessages[0].to}`);
+    } else {
+      // Mostrar algunos mensajes cercanos a la fecha para debugging
+      const nearbyMessages = allOutboundMessages.filter((msg) => {
+        const msgDate = new Date(msg.createdAt);
+        const targetDate = new Date(startOfDay);
+        const diffDays = Math.abs((msgDate.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays <= 2; // Mensajes dentro de 2 días
+      }).slice(0, 5);
+      
+      if (nearbyMessages.length > 0) {
+        console.log(`[MESSAGES] Mensajes cercanos a la fecha solicitada (dentro de 2 días):`);
+        nearbyMessages.forEach((msg, idx) => {
+          const msgDate = new Date(msg.createdAt);
+          const isInRange = msg.createdAt >= startOfDay && msg.createdAt <= endOfDay;
+          console.log(`[MESSAGES] ${idx + 1}. createdAt: ${msg.createdAt.toISOString()} (${msgDate.toISOString().split('T')[0]}), to: ${msg.to}, en rango: ${isInRange}`);
+        });
+      }
     }
+    
+    // Ordenar por fecha ascendente
+    sentMessages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
     // Para cada mensaje enviado, verificar si tuvo respuesta y buscar el nombre del contacto
     const messagesWithResponseStatus = await Promise.all(
