@@ -65,19 +65,41 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
     const dateString = date as string; // "2026-02-06"
     const [year, month, day] = dateString.split("-").map(Number);
     
-    // Crear fechas locales en la zona horaria de Bogotá
-    // fromZonedTime interpreta la fecha como si fuera en la zona horaria especificada
-    // y la convierte a UTC para comparar con createdAt (que está en UTC en la DB)
-    const startOfDayLocal = new Date(year, month - 1, day, 0, 0, 0, 0);
-    const endOfDayLocal = new Date(year, month - 1, day, 23, 59, 59, 999);
+    // Crear strings ISO para el inicio y fin del día en la zona horaria de Bogotá
+    // Formato: "YYYY-MM-DDTHH:mm:ss" (sin Z, para que fromZonedTime lo interprete como hora local)
+    const startOfDayString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`;
+    const endOfDayString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999`;
     
-    // Convertir de zona horaria de Bogotá a UTC
+    // Crear objetos Date desde los strings (se interpretarán como UTC, pero los trataremos como hora local de Bogotá)
+    const startOfDayLocal = new Date(startOfDayString);
+    const endOfDayLocal = new Date(endOfDayString);
+    
+    // Convertir de zona horaria de Bogotá a UTC usando fromZonedTime
+    // fromZonedTime toma una fecha y la interpreta como si fuera en la zona horaria especificada,
+    // luego la convierte a UTC
     const startOfDay = fromZonedTime(startOfDayLocal, timezone);
     const endOfDay = fromZonedTime(endOfDayLocal, timezone);
     
     // Log para debugging
     console.log(`[MESSAGES] Filtrando mensajes para fecha: ${dateString} (${timezone})`);
+    console.log(`[MESSAGES] Fecha local inicio: ${startOfDayLocal.toISOString()}`);
+    console.log(`[MESSAGES] Fecha local fin: ${endOfDayLocal.toISOString()}`);
     console.log(`[MESSAGES] Rango UTC: ${startOfDay.toISOString()} - ${endOfDay.toISOString()}`);
+    
+    // Log adicional: mostrar algunos mensajes para verificar
+    const allMessages = await prisma.message.findMany({
+      where: {
+        direction: "outbound",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 5,
+    });
+    console.log(`[MESSAGES] Últimos 5 mensajes en DB:`);
+    allMessages.forEach((msg, idx) => {
+      console.log(`[MESSAGES] ${idx + 1}. createdAt: ${msg.createdAt.toISOString()}, to: ${msg.to}`);
+    });
 
     // Obtener el número personal para filtrar mensajes de reenvío interno
     const myWhatsAppNumber = process.env.MY_WHATSAPP_NUMBER?.trim();
