@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../db";
 import { validateTwilioSignature } from "../utils/validation";
 import { forwardToMyWhatsApp } from "../services/twilio";
+import { getTempMedia } from "../services/temp-media-store";
 
 const router = Router();
 
@@ -143,6 +144,21 @@ router.post("/twilio/whatsapp", async (req: Request, res: Response) => {
     // Responder 200 para que Twilio no intente reenviar
     return res.status(200).type("text/xml").send("<Response></Response>");
   }
+});
+
+/**
+ * GET /webhooks/temp-media/:id
+ * Sirve un binario guardado al reenviar imágenes (evita depender de imgbb desde el servidor).
+ */
+router.get("/temp-media/:id", (req: Request, res: Response) => {
+  const { id } = req.params;
+  const entry = getTempMedia(id);
+  if (!entry) {
+    return res.status(404).type("text/plain").send("Not found or expired");
+  }
+  res.setHeader("Content-Type", entry.contentType);
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  return res.status(200).send(entry.buffer);
 });
 
 export default router;

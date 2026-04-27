@@ -1,5 +1,6 @@
 import twilio from "twilio";
 import { prisma } from "../db";
+import { getPublicBaseUrl, putTempMedia } from "./temp-media-store";
 
 /**
  * Template ID aprobado de WhatsApp Business
@@ -225,8 +226,26 @@ const downloadTwilioMedia = async (
 };
 
 /**
+ * Extensión de archivo razonable para imgbb (multipart con nombre de archivo)
+ */
+const extFromContentType = (contentType: string): string => {
+  const main = contentType.split(";")[0].trim().toLowerCase();
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+  };
+  return map[main] || "jpg";
+};
+
+/**
  * Sube una imagen a imgbb y retorna la URL pública
  * Con reintentos automáticos en caso de fallo
+ *
+ * Nota: imgbb documenta que application/x-www-form-urlencoded puede alterar el base64;
+ * se usa multipart/form-data con el binario (Blob) como recomiendan.
  */
 const uploadToImgbb = async (
   imageBuffer: Buffer,
@@ -239,49 +258,68 @@ const uploadToImgbb = async (
     throw new Error("IMGBB_API_KEY no está configurado. Configúralo en Render Dashboard > Environment Variables");
   }
 
-  // Convertir buffer a base64
-  const base64Image = imageBuffer.toString("base64");
-  
+  const ext = extFromContentType(contentType);
+  const filename = `twilio-inbound-${Date.now()}.${ext}`;
+
   let lastError: Error | null = null;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[IMGBB] Intento ${attempt}/${maxRetries} subiendo imagen a imgbb (${imageBuffer.length} bytes, tipo: ${contentType})...`);
       
-      // Crear FormData para la petición
-      const formData = new URLSearchParams();
+      const formData = new FormData();
       formData.append("key", imgbbApiKey);
-      formData.append("image", base64Image);
+      const typePart = contentType.split(";")[0].trim() || "image/jpeg";
+      const blob = new Blob([imageBuffer], { type: typePart });
+      formData.append("image", blob, filename);
+      formData.append("name", filename);
 
       // Timeout de 30 segundos para la subida
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+      // No fijar Content-Type: fetch añade boundary correcto para multipart
       const response = await fetch("https://api.imgbb.com/1/upload", {
         method: "POST",
         body: formData,
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
         signal: controller.signal,
       });
       
       clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error subiendo a imgbb: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json() as {
-        success: boolean;
+      const rawText = await response.text();
+      let data: {
+        success?: boolean;
+        status?: number;
+        error?: { code?: string | number; message?: string };
         data?: {
           url?: string;
+          error?: { message?: string; code?: string | number };
         };
       };
-      
-      if (!data.success || !data.data || !data.data.url) {
-        throw new Error(`Error en respuesta de imgbb: ${JSON.stringify(data)}`);
+      try {
+        data = JSON.parse(rawText) as typeof data;
+      } catch {
+        throw new Error(
+          `Error subiendo a imgbb: HTTP ${response.status} — cuerpo no es JSON: ${rawText.substring(0, 500)}`
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Error HTTP imgbb: ${response.status} ${response.statusText} — ${rawText.substring(0, 800)}`
+        );
+      }
+
+      if (data.error?.message) {
+        throw new Error(`imgbb error: ${data.error.message} (code: ${data.error.code ?? "n/a"})`);
+      }
+      if (data.data?.error?.message) {
+        throw new Error(`imgbb data.error: ${data.data.error.message} (code: ${data.data.error.code ?? "n/a"})`);
+      }
+
+      if (!data.success || !data.data?.url) {
+        throw new Error(`Respuesta imgbb inválida: ${JSON.stringify(data).substring(0, 1000)}`);
       }
 
       const publicUrl = data.data.url;
@@ -334,38 +372,65 @@ export const forwardToMyWhatsApp = async (
     if (mediaUrls.length > 0) {
       console.log(`[TWILIO] Reenviando mensaje con ${mediaUrls.length} imagen(es)`);
       
-      // Descargar cada imagen, subirla a imgbb y obtener URL pública
-      // Las URLs de Twilio requieren autenticación y no funcionan para reenvío
-      // Solución: Subir a imgbb para obtener URL pública accesible
-      
+      // Descargar, publicar en URL propia (Render) o imgbb; imgbb a menudo devuelve 103 desde IPs de datacenter
       const processedUrls: string[] = [];
-      
+
       for (let i = 0; i < Math.min(mediaUrls.length, 10); i++) {
         const mediaUrl = mediaUrls[i];
         try {
           console.log(`[TWILIO] Procesando imagen ${i + 1}/${mediaUrls.length}...`);
           console.log(`[TWILIO] URL original: ${mediaUrl}`);
-          
-          // Descargar la imagen desde Twilio con autenticación
+
           console.log(`[TWILIO] Descargando imagen ${i + 1}...`);
           const { buffer: imageBuffer, contentType } = await downloadTwilioMedia(
             mediaUrl,
             credentials.accountSid,
             credentials.authToken
           );
-          
-          console.log(`[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`);
-          
-          // Subir a imgbb para obtener URL pública
-          console.log(`[TWILIO] Subiendo imagen ${i + 1} a imgbb...`);
-          const publicUrl = await uploadToImgbb(imageBuffer, contentType);
-          
-          processedUrls.push(publicUrl);
-          console.log(`[TWILIO] ✅ Imagen ${i + 1} procesada y subida a imgbb: ${publicUrl}`);
-          
+
+          console.log(
+            `[TWILIO] Imagen descargada: ${imageBuffer.length} bytes, tipo: ${contentType}`
+          );
+
+          let publicUrl: string | null = null;
+          const base = getPublicBaseUrl();
+          if (base) {
+            const tempId = putTempMedia(imageBuffer, contentType);
+            if (tempId) {
+              publicUrl = `${base}/webhooks/temp-media/${tempId}`;
+              console.log(
+                `[TWILIO] Imagen publicada en URL temporal (app): ${publicUrl.substring(0, 80)}...`
+              );
+            } else {
+              console.warn(
+                `[TWILIO] putTempMedia devolvió null (sin base pública o imagen demasiado grande).`
+              );
+            }
+          } else {
+            console.warn(
+              `[TWILIO] Sin URL pública: define PUBLIC_BASE_URL o usa Render (RENDER_EXTERNAL_URL). Se intenta imgbb.`
+            );
+          }
+
+          if (!publicUrl) {
+            console.log(`[TWILIO] Subiendo imagen ${i + 1} a imgbb (respaldo)...`);
+            publicUrl = await uploadToImgbb(imageBuffer, contentType);
+          }
+
+          if (publicUrl) {
+            processedUrls.push(publicUrl);
+            console.log(
+              `[TWILIO] ✅ Imagen ${i + 1} lista para reenviar`
+            );
+          }
         } catch (error: any) {
-          console.error(`[TWILIO] ❌ Error procesando imagen ${i + 1}:`, error.message);
-          // Continuar con las otras imágenes
+          const msg = String(error?.message ?? error);
+          console.error(`[TWILIO] ❌ Error procesando imagen ${i + 1}:`, msg);
+          if (msg.includes("103") || msg.toLowerCase().includes("forbidden")) {
+            console.error(
+              `[TWILIO] imgbb 103: suele bloquear servidores en la nube. Asegúrate de tener RENDER_EXTERNAL_URL o PUBLIC_BASE_URL para usar /webhooks/temp-media.`
+            );
+          }
         }
       }
 
