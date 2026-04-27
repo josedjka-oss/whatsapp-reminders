@@ -159,6 +159,84 @@ export const sendWhatsAppMessage = async ({
 };
 
 /**
+ * Envío de sesión (no plantilla) con medios. Twilio descarga publicUrl al momento:
+ * el usuario recibe la imagen en el chat; no depende de abrir el enlace después
+ * (el plan gratuito de Render vacía memoria y el enlace puede caducar).
+ */
+const sendSessionWhatsAppWithMedia = async ({
+  to,
+  body,
+  mediaUrls,
+}: {
+  to: string;
+  body: string;
+  mediaUrls: string[];
+}): Promise<string> => {
+  const credentials = getTwilioCredentials();
+  const client = getTwilioClient();
+
+  if (!to.match(/^whatsapp:\+\d{10,15}$/)) {
+    throw new Error(`Formato de número inválido: ${to}. Debe ser 'whatsapp:+57XXXXXXXXXX'`);
+  }
+  if (to === credentials.fromNumber) {
+    throw new Error("No se puede enviar un mensaje a sí mismo");
+  }
+  if (mediaUrls.length === 0) {
+    throw new Error("mediaUrls no puede estar vacío");
+  }
+
+  const cleanBody = body.replace(/[\u0000-\u001F]/g, "").trim();
+  const maxCaption = 1024;
+  const caption =
+    cleanBody.length > maxCaption
+      ? `${cleanBody.slice(0, maxCaption - 1)}…`
+      : cleanBody;
+
+  console.log(
+    `[TWILIO] 📤 Reenvío con media (sesión). Twilio descargará ahora ${mediaUrls.length} URL(s) pública(s).`
+  );
+
+  const message = await client.messages.create({
+    from: credentials.fromNumber,
+    to,
+    body: caption,
+    mediaUrl: mediaUrls,
+  });
+
+  if (message.errorCode) {
+    throw new Error(
+      `Error ${message.errorCode}: ${message.errorMessage || "Error desconocido"}`
+    );
+  }
+
+  await prisma.message.create({
+    data: {
+      direction: "outbound",
+      from: credentials.fromNumber,
+      to,
+      body: `${caption} [+${mediaUrls.length} archivos multimedia]`,
+      twilioSid: message.sid,
+    },
+  });
+
+  console.log(`[TWILIO] ✅ Media enviada (sesión). SID: ${message.sid}`);
+  return message.sid;
+};
+
+const isSessionOrMediaSendFailure = (err: unknown): boolean => {
+  const e = err as { code?: number; message?: string; status?: number };
+  const code = e?.code;
+  const message = String(e?.message ?? "");
+  if (code === 63016) return true;
+  if (code === 21609) return true;
+  if (message.includes("63016")) return true;
+  if (message.toLowerCase().includes("outside") && message.toLowerCase().includes("window"))
+    return true;
+  if (message.toLowerCase().includes("messaging service")) return true;
+  return false;
+};
+
+/**
  * Descarga una imagen desde una URL de Twilio usando autenticación
  * Con reintentos automáticos en caso de fallo
  */
@@ -364,7 +442,6 @@ export const forwardToMyWhatsApp = async (
     return;
   }
 
-  const client = getTwilioClient();
   const forwardedBody = `📩 Respuesta de ${from}:\n\n${body || ""}`;
 
   try {
@@ -444,24 +521,39 @@ export const forwardToMyWhatsApp = async (
         return;
       }
 
-      // IMPORTANTE: WhatsApp Business API solo permite mensajes libres dentro de 24 horas
-      // Como no sabemos si estamos dentro o fuera de la ventana, SIEMPRE usamos template aprobado
-      // Esto garantiza que el mensaje se envíe correctamente sin importar el tiempo
-      
-      console.log(`[TWILIO] Reenviando mensaje con ${processedUrls.length} imagen(es) usando template aprobado...`);
-      
-      // Construir mensaje con URLs de imágenes incluidas en el texto
-      // Usamos template aprobado para evitar error 63016 (fuera de ventana de 24 horas)
-      const imageUrlsText = processedUrls.map((url, idx) => `Imagen ${idx + 1}: ${url}`).join('\n');
-      const templateBody = `${forwardedBody}\n\n📷 Imágenes adjuntas:\n${imageUrlsText}`;
-      
-      // Usar template aprobado (siempre funciona, incluso después de 24 horas)
-      await sendWhatsAppMessage({
-        to: myWhatsAppNumber,
-        reminderText: templateBody,
-      });
-      
-      console.log(`[TWILIO] ✅ Mensaje con ${processedUrls.length} imagen(es) reenviado usando template aprobado`);
+      // Prioridad: mensaje de sesión con mediaUrl. Twilio descarga la URL en el acto → la imagen
+      // se ve en WhatsApp aunque el enlace temporal deje de funcionar tras un sleep de Render.
+      try {
+        await sendSessionWhatsAppWithMedia({
+          to: myWhatsAppNumber,
+          body: forwardedBody,
+          mediaUrls: processedUrls,
+        });
+        console.log(
+          `[TWILIO] ✅ Reenvío con imagen(es) mostrada(s) en el chat (no solo enlace)`
+        );
+      } catch (mediaErr: unknown) {
+        const errMsg = String((mediaErr as Error)?.message ?? mediaErr);
+        console.warn(
+          `[TWILIO] Envío con media falló (${errMsg}), usando plantilla con enlaces como respaldo`
+        );
+        if (!isSessionOrMediaSendFailure(mediaErr)) {
+          console.error(`[TWILIO] Detalle error media:`, mediaErr);
+        }
+
+        const imageUrlsText = processedUrls
+          .map((url, idx) => `Imagen ${idx + 1}:\n${url}\n`)
+          .join("\n");
+        const templateBody = `${forwardedBody}\n\n📷 Si no ves la foto arriba, abre estos enlaces (pueden fallar tras reinicio en plan gratuito):\n\n${imageUrlsText}`;
+
+        await sendWhatsAppMessage({
+          to: myWhatsAppNumber,
+          reminderText: templateBody,
+        });
+        console.log(
+          `[TWILIO] ✅ Mensaje con ${processedUrls.length} enlace(s) enviado por plantilla (respaldo)`
+        );
+      }
     } else {
       // Solo texto, usar función normal con template
       await sendWhatsAppMessage({
