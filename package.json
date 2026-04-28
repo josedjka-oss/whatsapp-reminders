@@ -22,34 +22,35 @@
     "node": "20"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "twilio": "^4.23.0",
     "@prisma/client": "^5.11.0",
-    "node-cron": "^3.0.3",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.12",
+    "@types/node-cron": "^3.0.11",
+    "cloudinary": "^2.10.0",
+    "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.1.0",
-    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "openai": "^4.28.0",
+    "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "@types/node": "^20.14.12",
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
-    "@types/node-cron": "^3.0.11"
+    "node-cron": "^3.0.3",
+    "openai": "^4.28.0",
+    "twilio": "^4.23.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.4",
-    "ts-node-dev": "^2.0.0",
-    "prisma": "^5.11.0",
-    "next": "^14.2.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "tailwindcss": "^3.4.1",
     "autoprefixer": "^10.4.17",
+    "concurrently": "^8.2.2",
+    "next": "^14.2.0",
     "postcss": "^8.4.35",
-    "concurrently": "^8.2.2"
+    "prisma": "^5.11.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "tailwindcss": "^3.4.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.4"
   },
   "private": true
 }

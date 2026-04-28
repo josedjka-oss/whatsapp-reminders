@@ -1,6 +1,7 @@
 import twilio from "twilio";
 import { prisma } from "../db";
 import { getPublicBaseUrl, putTempMedia } from "./temp-media-store";
+import { isCloudinaryConfigured, uploadBufferToCloudinary } from "./cloudinary-upload";
 
 /**
  * Template ID aprobado de WhatsApp Business
@@ -457,23 +458,44 @@ export const forwardToMyWhatsApp = async (
           );
 
           let publicUrl: string | null = null;
-          const base = getPublicBaseUrl();
-          if (base) {
-            const tempId = putTempMedia(imageBuffer, contentType);
-            if (tempId) {
-              publicUrl = `${base}/webhooks/temp-media/${tempId}`;
+
+          if (isCloudinaryConfigured()) {
+            try {
+              publicUrl = await uploadBufferToCloudinary(imageBuffer, contentType);
               console.log(
-                `[TWILIO] Imagen publicada en URL temporal (app): ${publicUrl.substring(0, 80)}...`
+                `[TWILIO] ✅ Imagen en Cloudinary: ${publicUrl.substring(0, 80)}...`
               );
-            } else {
+            } catch (cloudErr: unknown) {
               console.warn(
-                `[TWILIO] putTempMedia devolvió null (sin base pública o imagen demasiado grande).`
+                `[TWILIO] Cloudinary falló, se usará temporal local o imgbb:`,
+                String((cloudErr as Error)?.message ?? cloudErr)
               );
             }
           } else {
             console.warn(
-              `[TWILIO] Sin URL pública: define PUBLIC_BASE_URL o usa Render (RENDER_EXTERNAL_URL). Se intenta imgbb.`
+              `[TWILIO] Cloudinary no configurado; usando URL temporal (/webhooks/temp-media) o imgbb.`
             );
+          }
+
+          if (!publicUrl) {
+            const base = getPublicBaseUrl();
+            if (base) {
+              const tempId = putTempMedia(imageBuffer, contentType);
+              if (tempId) {
+                publicUrl = `${base}/webhooks/temp-media/${tempId}`;
+                console.log(
+                  `[TWILIO] Imagen publicada en URL temporal (app): ${publicUrl.substring(0, 80)}...`
+                );
+              } else {
+                console.warn(
+                  `[TWILIO] putTempMedia devolvió null (sin base pública o imagen demasiado grande).`
+                );
+              }
+            } else {
+              console.warn(
+                `[TWILIO] Sin URL pública: define PUBLIC_BASE_URL o usa Render (RENDER_EXTERNAL_URL). Se intenta imgbb.`
+              );
+            }
           }
 
           if (!publicUrl) {
