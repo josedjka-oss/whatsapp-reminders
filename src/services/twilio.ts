@@ -57,6 +57,36 @@ interface SendMessageParams {
 }
 
 /**
+ * Normaliza texto que irá en {{1}} sin recortar tamaño (útil antes de partir en chunks).
+ */
+const normalizeWhatsAppTemplateBody = (text: string): string => {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\t/g, " ")
+    .replace(/\n+/g, " · ")
+    .replace(/\r/g, "")
+    .replace(/ {5,}/g, " ")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim();
+};
+
+/**
+ * WhatsApp/Twilio (Content API): {{1}} no puede contener newline, tab ni más de 4 espacios
+ * seguidos — error 21656. Opcionalmente recorta.
+ * @see https://www.twilio.com/docs/errors/21656
+ */
+const sanitizeWhatsAppTemplateVariable = (text: string, maxLength = 1024): string => {
+  const normalized = normalizeWhatsAppTemplateBody(text);
+  if (!normalized.length) {
+    return "";
+  }
+  if (normalized.length > maxLength) {
+    return `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
+  }
+  return normalized;
+};
+
+/**
  * Envía un mensaje de WhatsApp usando Twilio con template aprobado
  */
 export const sendWhatsAppMessage = async ({
@@ -89,10 +119,10 @@ export const sendWhatsAppMessage = async ({
     // con las claves como strings que corresponden a los números de las variables
     // Formato: {"1": "valor", "2": "valor2", ...}
     
-    // Limpiar de caracteres de control, pero conservar \n y \r (el template los necesita y JSON los admite)
-    const cleanReminderText = reminderText
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
-      .trim();
+    const cleanReminderText = sanitizeWhatsAppTemplateVariable(reminderText, 1024);
+    if (!cleanReminderText.length) {
+      throw new Error("El texto del template quedó vacío tras sanitizar (21656/evitar valores vacíos).");
+    }
     
     const contentVariables = {
       "1": cleanReminderText
@@ -166,31 +196,30 @@ export const sendWhatsAppMessage = async ({
  */
 const TEMPLATE_PARAM_SAFE_MAX = 900;
 
-const sendTemplateToMyNumberInChunks = async (to: string, fullText: string): Promise<void> => {
-  // Misma lógica de limpieza que sendWhatsAppMessage: conservar newlines
-  const cleaned = fullText
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
-    .trim();
-  if (cleaned.length <= TEMPLATE_PARAM_SAFE_MAX) {
-    await sendWhatsAppMessage({ to, reminderText: cleaned });
+const sendTemplateToMyNumberInChunks = async (
+  to: string,
+  fullText: string
+): Promise<void> => {
+  const normalized = normalizeWhatsAppTemplateBody(fullText);
+  if (!normalized.length) {
+    throw new Error(
+      "[TWILIO] Texto de reenvío vacío tras normalize (21656/evitar valores vacíos)."
+    );
+  }
+  if (normalized.length <= TEMPLATE_PARAM_SAFE_MAX) {
+    await sendWhatsAppMessage({ to, reminderText: normalized });
     return;
   }
-  const totalChunks = Math.ceil(cleaned.length / TEMPLATE_PARAM_SAFE_MAX);
+  const totalChunks = Math.ceil(normalized.length / TEMPLATE_PARAM_SAFE_MAX);
   for (let c = 0; c < totalChunks; c++) {
-    const chunk = cleaned.slice(
+    const chunk = normalized.slice(
       c * TEMPLATE_PARAM_SAFE_MAX,
       (c + 1) * TEMPLATE_PARAM_SAFE_MAX
     );
-    const withHeader =
-      totalChunks > 1
-        ? `(${c + 1}/${totalChunks})\n${chunk}`
-        : chunk;
-    if (withHeader.length > 1020) {
-      // Evitar añadir cabecera que vuelva a exceder límite
-      await sendWhatsAppMessage({ to, reminderText: chunk });
-    } else {
-      await sendWhatsAppMessage({ to, reminderText: withHeader });
-    }
+    // Sin newline en cabeceras: causa 21656; usar separador puntos medios como el resto
+    const part =
+      totalChunks > 1 ? `( parte ${c + 1}/${totalChunks} ) · ${chunk}` : chunk;
+    await sendWhatsAppMessage({ to, reminderText: part });
   }
 };
 
