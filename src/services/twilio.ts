@@ -533,10 +533,8 @@ export const forwardToMyWhatsApp = async (
       // Solo plantilla: el reenvío a tu otro número no entra en "ventana 24h" con media libre
       // respecto a quien te escribió al número de negocio; además el texto + URLs a menudo
       // excede el límite de {{1}} → partimos en varios mensajes de plantilla.
-      const imageUrlsText = processedUrls
-        .map((url, idx) => `Imagen ${idx + 1}:\n${url}\n`)
-        .join("\n");
-      const templateBody = `${forwardedBody}\n\n📷 Enlaces a la evidencia (ábrelos en el navegador; en Render gratis el enlace puede caducar si el servicio se durmió):\n\n${imageUrlsText}`;
+      const urlsLine = processedUrls.join(" · ");
+      const templateBody = `${forwardedBody}\n\n📷 ${urlsLine}`;
 
       await sendTemplateToMyNumberInChunks(myWhatsAppNumber, templateBody);
       console.log(
