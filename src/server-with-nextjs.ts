@@ -14,6 +14,7 @@ import remindersRouter from "./routes/reminders";
 import webhooksRouter from "./routes/webhooks";
 import messagesRouter from "./routes/messages";
 import aiRouter from "./routes/ai";
+import integrationFirebaseRouter from "./routes/integration-firebase";
 import { startScheduler } from "./services/scheduler";
 import next from "next";
 
@@ -86,6 +87,7 @@ app.get("/health", async (req, res) => {
 app.use("/api/reminders", remindersRouter);
 app.use("/api/messages", messagesRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/integration", integrationFirebaseRouter);
 app.use("/webhooks", webhooksRouter);
 
 // Importante: abrir el puerto ANTES de nextApp.prepare(). Si prepare() tarda, el

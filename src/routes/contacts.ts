@@ -1,31 +1,8 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../db";
+import { normalizeWhatsAppPhoneNumber as normalizePhoneNumber } from "../utils/whatsapp-phone-normalize";
 
 const router = Router();
-
-/**
- * Normaliza un número de teléfono agregando +57 si no tiene código de país
- */
-const normalizePhoneNumber = (phone: string): string => {
-  let normalized = phone.trim();
-  
-  // Remover "whatsapp:" si está presente
-  if (normalized.startsWith("whatsapp:")) {
-    normalized = normalized.replace("whatsapp:", "");
-  }
-  
-  // Si no empieza con +, agregar +57 (Colombia)
-  if (!normalized.startsWith("+")) {
-    normalized = `+57${normalized}`;
-  }
-  
-  // Agregar prefijo whatsapp: si no lo tiene
-  if (!normalized.startsWith("whatsapp:")) {
-    normalized = `whatsapp:${normalized}`;
-  }
-  
-  return normalized;
-};
 
 // Listar contactos
 router.get("/", async (req: Request, res: Response) => {
