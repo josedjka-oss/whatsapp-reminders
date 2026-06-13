@@ -25,6 +25,7 @@ type Vale = {
 
 type Slip = {
   id: string;
+  employeeId: string;
   employee: { name: string; phone: string | null };
   netTotal: number;
   publicUrl: string;
@@ -67,6 +68,7 @@ export default function NominaQuincenaWorkspacePage() {
   const [detail, setDetail] = useState<PeriodDetail | null>(null);
   const [slips, setSlips] = useState<Slip[]>([]);
   const [busy, setBusy] = useState(false);
+  const [busyEmployeeId, setBusyEmployeeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -162,21 +164,66 @@ export default function NominaQuincenaWorkspacePage() {
     }
   };
 
-  const handleSendOne = async (slipId: string) => {
-    setBusy(true);
+  const handleGenerateOne = async (employeeId: string) => {
+    setBusyEmployeeId(employeeId);
     try {
-      const res = await fetch(`/api/nomina/slips/${slipId}/send-whatsapp`, { method: "POST" });
+      const res = await fetch(`/api/nomina/periods/${periodId}/slips/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId }),
+      });
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || "Error");
         return;
       }
-      alert("WhatsApp enviado");
       await loadSlips();
+      await load();
     } finally {
-      setBusy(false);
+      setBusyEmployeeId(null);
     }
   };
+
+  const handleGenerateAndSendOne = async (employeeId: string, slipId?: string) => {
+    setBusyEmployeeId(employeeId);
+    try {
+      let targetSlipId = slipId;
+      if (!targetSlipId) {
+        const genRes = await fetch(`/api/nomina/periods/${periodId}/slips/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeId }),
+        });
+        const genData = await genRes.json();
+        if (!genRes.ok) {
+          alert(genData.error || "Error al generar recibo");
+          return;
+        }
+        targetSlipId = genData.slip?.id;
+      }
+
+      if (!targetSlipId) {
+        alert("No se pudo obtener el recibo");
+        return;
+      }
+
+      const sendRes = await fetch(`/api/nomina/slips/${targetSlipId}/send-whatsapp`, {
+        method: "POST",
+      });
+      const sendData = await sendRes.json();
+      if (!sendRes.ok) {
+        alert(sendData.error || "Error al enviar WhatsApp");
+        return;
+      }
+      alert("Recibo generado y WhatsApp enviado");
+      await loadSlips();
+      await load();
+    } finally {
+      setBusyEmployeeId(null);
+    }
+  };
+
+  const slipByEmployeeId = new Map(slips.map((s) => [s.employeeId, s]));
 
   const totals =
     detail?.summary.rows.reduce(
@@ -243,7 +290,7 @@ export default function NominaQuincenaWorkspacePage() {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50"
                   onClick={() => void handleGenerate()}
                 >
-                  Generar recibos
+                  Generar recibos (todos)
                 </button>
                 <button
                   type="button"
@@ -319,7 +366,7 @@ export default function NominaQuincenaWorkspacePage() {
 
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
               <div className="flex flex-wrap justify-between items-center gap-2">
-                <h2 className="font-semibold text-lg">Recibos ({slips.length})</h2>
+                <h2 className="font-semibold text-lg">Recibos por empleado</h2>
                 {!isClosed && slips.length > 0 && (
                   <button
                     type="button"
@@ -331,50 +378,80 @@ export default function NominaQuincenaWorkspacePage() {
                   </button>
                 )}
               </div>
-              {slips.length === 0 ? (
-                <p className="text-gray-500 text-sm">
-                  {isClosed
-                    ? "No hay recibos generados para esta quincena."
-                    : 'Pulsa "Generar recibos" para crear los enlaces de pago.'}
+              {!isClosed && (
+                <p className="text-xs text-gray-500">
+                  Puedes generar todos con el botón superior o uno por uno aquí abajo.
                 </p>
+              )}
+              {detail.summary.rows.length === 0 ? (
+                <p className="text-gray-500 text-sm">No hay empleados activos.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left border-b">
-                        <th className="py-2">Empleado</th>
-                        <th>Neto</th>
-                        <th>Enviado</th>
-                        <th>Acciones</th>
+                      <tr className="text-left border-b bg-gray-50">
+                        <th className="py-2 px-2">Empleado</th>
+                        <th className="py-2 px-2">Neto</th>
+                        <th className="py-2 px-2">Enviado</th>
+                        <th className="py-2 px-2">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {slips.map((s) => (
-                        <tr key={s.id} className="border-b">
-                          <td className="py-2">{s.employee.name}</td>
-                          <td>{formatCop(s.netTotal)}</td>
-                          <td>{s.whatsappSentAt ? "Sí" : "No"}</td>
-                          <td className="space-x-2">
-                            <a
-                              href={s.publicUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-indigo-600"
-                            >
-                              Recibo
-                            </a>
-                            {!isClosed && (
-                              <button
-                                type="button"
-                                className="text-green-700"
-                                onClick={() => void handleSendOne(s.id)}
-                              >
-                                WhatsApp
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {detail.summary.rows.map((row) => {
+                        const slip = slipByEmployeeId.get(row.employeeId);
+                        const rowBusy = busyEmployeeId === row.employeeId;
+                        const netPreview =
+                          row.netSalaryWithTransport + row.netBonus + row.netOvertime;
+
+                        return (
+                          <tr key={row.employeeId} className="border-b">
+                            <td className="py-2 px-2 font-medium">{row.name}</td>
+                            <td className="py-2 px-2">
+                              {slip ? formatCop(slip.netTotal) : formatCop(netPreview)}
+                              {!slip && !isClosed && (
+                                <span className="block text-xs text-gray-400">estimado</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-2">{slip?.whatsappSentAt ? "Sí" : "No"}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap gap-2">
+                                {!isClosed && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={rowBusy || busy}
+                                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs disabled:opacity-50"
+                                      onClick={() => void handleGenerateOne(row.employeeId)}
+                                    >
+                                      {slip ? "Regenerar" : "Generar recibo"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={rowBusy || busy}
+                                      className="px-2 py-1 bg-green-700 text-white rounded text-xs disabled:opacity-50"
+                                      onClick={() =>
+                                        void handleGenerateAndSendOne(row.employeeId, slip?.id)
+                                      }
+                                    >
+                                      {slip ? "Enviar WhatsApp" : "Generar y enviar"}
+                                    </button>
+                                  </>
+                                )}
+                                {slip && (
+                                  <a
+                                    href={slip.publicUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2 py-1 text-indigo-600 text-xs inline-flex items-center"
+                                  >
+                                    Ver recibo
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

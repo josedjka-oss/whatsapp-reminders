@@ -595,6 +595,35 @@ router.post("/periods/:id/close", async (req, res) => {
   }
 });
 
+router.post("/periods/:id/slips/generate", async (req, res) => {
+  try {
+    const { employeeId } = req.body ?? {};
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId es requerido" });
+    }
+
+    const period = await prisma.nominaPeriod.findUniqueOrThrow({
+      where: { id: req.params.id },
+    });
+    if (period.status === "closed") {
+      return res.status(400).json({ error: "No se puede generar recibos en una quincena cerrada." });
+    }
+
+    const slip = await upsertSlipForEmployee(String(employeeId), period.id);
+    return res.json({
+      slip: {
+        ...slip,
+        employeeId: slip.employeeId,
+        publicUrl: buildSlipPublicUrl(slip.accessToken),
+        netTotal: Number(slip.netTotal),
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
 router.get("/periods/:id/slips", async (req, res) => {
   const slips = await prisma.nominaSlip.findMany({
     where: { periodId: req.params.id },
@@ -604,6 +633,7 @@ router.get("/periods/:id/slips", async (req, res) => {
   return res.json(
     slips.map((s) => ({
       ...s,
+      employeeId: s.employeeId,
       publicUrl: buildSlipPublicUrl(s.accessToken),
       grossSalary: Number(s.grossSalary),
       grossTransport: Number(s.grossTransport),
