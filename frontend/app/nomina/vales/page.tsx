@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { NavigationHeader } from "@/components/NavigationHeader";
+import { compressImageFile } from "@/lib/compress-image";
 
 type Employee = { id: string; name: string };
 type Vale = {
@@ -65,6 +66,9 @@ function NominaValesContent() {
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const [empRes, valeRes] = await Promise.all([
@@ -79,19 +83,33 @@ function NominaValesContent() {
     void load();
   }, [load]);
 
-  const handlePhoto = (file: File | null) => {
-    if (!file) {
-      setPhotoPreview(null);
-      setPhotoBase64(null);
+  const handlePhoto = async (file: File | null) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Selecciona un archivo de imagen");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result ?? "");
-      setPhotoPreview(result);
-      setPhotoBase64(result);
-    };
-    reader.readAsDataURL(file);
+
+    setPhotoLoading(true);
+    try {
+      const compressed = await compressImageFile(file);
+      setPhotoPreview(compressed);
+      setPhotoBase64(compressed);
+    } catch {
+      alert("No se pudo procesar la foto. Intenta con otra imagen.");
+    } finally {
+      setPhotoLoading(false);
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
+    }
+  };
+
+  const handleClearPhoto = () => {
+    setPhotoPreview(null);
+    setPhotoBase64(null);
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
   };
 
   const handleSubmit = async () => {
@@ -310,20 +328,79 @@ function NominaValesContent() {
               : ""}
           </p>
 
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="w-full text-sm"
-            onChange={(e) => handlePhoto(e.target.files?.[0] ?? null)}
-            aria-label="Foto opcional u obligatoria según tipo"
-          />
-          {entryKind === "VALE" && (
-            <p className="text-xs text-amber-700">Foto obligatoria para vales</p>
-          )}
-          {photoPreview && (
-            <img src={photoPreview} alt="Vista previa" className="max-h-48 rounded border" />
-          )}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-gray-800">
+              Foto del vale {entryKind === "VALE" ? "(obligatoria)" : "(opcional)"}
+            </p>
+            <p className="text-xs text-gray-500">
+              En el celular puedes tomar la foto directamente con la cámara.
+            </p>
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => void handlePhoto(e.target.files?.[0] ?? null)}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => void handlePhoto(e.target.files?.[0] ?? null)}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={photoLoading}
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 min-h-[48px] px-4 py-3 bg-indigo-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                aria-label="Tomar foto con la cámara del celular"
+              >
+                📷 Tomar foto
+              </button>
+              <button
+                type="button"
+                disabled={photoLoading}
+                onClick={() => galleryInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 min-h-[48px] px-4 py-3 bg-gray-100 text-gray-800 rounded-lg text-sm font-medium border border-gray-200 disabled:opacity-50"
+                aria-label="Elegir foto de la galería"
+              >
+                🖼️ Galería
+              </button>
+            </div>
+
+            {photoLoading && <p className="text-sm text-gray-500">Procesando foto…</p>}
+
+            {photoPreview && (
+              <div className="space-y-2">
+                <img
+                  src={photoPreview}
+                  alt="Vista previa del vale"
+                  className="max-h-56 w-full object-contain rounded-lg border bg-gray-50"
+                />
+                <button
+                  type="button"
+                  onClick={handleClearPhoto}
+                  className="text-sm text-red-600"
+                  aria-label="Quitar foto"
+                >
+                  Quitar foto
+                </button>
+              </div>
+            )}
+
+            {entryKind === "VALE" && !photoPreview && (
+              <p className="text-xs text-amber-700">Debes tomar o subir una foto del vale.</p>
+            )}
+          </div>
 
           <button
             type="button"
