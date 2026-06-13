@@ -68,3 +68,127 @@ model AiPending {
   @@index([userId])
 }
 
+// --- Módulo Nómina ---
+
+model NominaEmployee {
+  id                 String   @id @default(uuid())
+  name               String
+  phone              String?  // whatsapp:+57... para envío
+  contactId          String?
+  baseSalary         Decimal  @db.Decimal(12, 2)
+  transportAllowance Decimal  @default(0) @db.Decimal(12, 2) // auxilio transporte mensual
+  baseBonus          Decimal  @default(0) @db.Decimal(12, 2)
+  bonusFrequency     String   @default("QUINCENAL") // QUINCENAL | MENSUAL
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  deductions NominaDeduction[]
+  vales      NominaVale[]
+  slips      NominaSlip[]
+  overtimes  NominaOvertime[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model NominaOvertime {
+  id           String   @id @default(uuid())
+  employeeId   String
+  year         Int
+  month        Int
+  daytimeHours Decimal  @db.Decimal(8, 2) // horas extra diurnas del mes
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employee NominaEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year, month])
+  @@index([year, month])
+}
+
+model NominaDeduction {
+  id         String   @id @default(uuid())
+  employeeId String
+  label      String
+  amount     Decimal  @db.Decimal(12, 2)
+  appliesTo  String   // SALARY | BONUS
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employee NominaEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model NominaVale {
+  id         String   @id @default(uuid())
+  employeeId String
+  holderName String
+  amount     Decimal  @db.Decimal(12, 2)
+  photoUrl   String
+  appliesTo  String   // SALARY | BONUS
+  year       Int
+  month      Int
+  half       Int      // 1 = pago día 15, 2 = pago fin de mes
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  employee NominaEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, year, month, half])
+}
+
+model NominaPeriod {
+  id        String   @id @default(uuid())
+  year      Int
+  month     Int
+  half      Int      // 1 | 2
+  payDay    Int      // 15 o último día del mes
+  status    String   @default("open") // open | closed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slips NominaSlip[]
+
+  @@unique([year, month, half])
+}
+
+model NominaSlip {
+  id              String    @id @default(uuid())
+  employeeId      String
+  periodId        String
+  accessToken     String    @unique @default(uuid())
+  grossSalary     Decimal   @db.Decimal(12, 2)
+  grossTransport  Decimal   @default(0) @db.Decimal(12, 2)
+  grossBonus      Decimal   @db.Decimal(12, 2)
+  grossOvertime   Decimal   @default(0) @db.Decimal(12, 2)
+  salaryDiscounts Decimal   @db.Decimal(12, 2)
+  bonusDiscounts  Decimal   @db.Decimal(12, 2)
+  netSalary       Decimal   @db.Decimal(12, 2)
+  netTransport    Decimal   @default(0) @db.Decimal(12, 2)
+  netBonus        Decimal   @db.Decimal(12, 2)
+  netOvertime     Decimal   @default(0) @db.Decimal(12, 2)
+  netTotal        Decimal   @db.Decimal(12, 2)
+  breakdown       Json
+  whatsappSentAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  employee NominaEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  period   NominaPeriod   @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, periodId])
+  @@index([accessToken])
+}
+
+model NominaScheduleConfig {
+  id             String   @id @default("default")
+  hour           Int      @default(9)
+  minute         Int      @default(0)
+  autoSendEnabled Boolean @default(true)
+  lastAutoRunKey String?
+  updatedAt      DateTime @updatedAt
+}
+

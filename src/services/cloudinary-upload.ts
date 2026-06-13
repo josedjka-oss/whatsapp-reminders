@@ -37,7 +37,8 @@ export const isCloudinaryConfigured = (): boolean => {
  */
 export const uploadBufferToCloudinary = async (
   buffer: Buffer,
-  contentType: string
+  contentType: string,
+  folder = "whatsapp-reminders/inbound"
 ): Promise<string> => {
   configureOnce();
 
@@ -51,7 +52,7 @@ export const uploadBufferToCloudinary = async (
   return await new Promise((resolve, reject) => {
     const upload = cloudinary.uploader.upload_stream(
       {
-        folder: "whatsapp-reminders/inbound",
+        folder,
         resource_type: resourceType,
         use_filename: false,
       },

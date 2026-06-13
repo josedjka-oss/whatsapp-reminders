@@ -67,6 +67,18 @@ export default function DashboardPage() {
               Guarda números de teléfono con nombres para usarlos fácilmente
             </p>
           </button>
+
+          {/* Nómina */}
+          <button
+            onClick={() => router.push("/nomina")}
+            className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 md:col-span-2 lg:col-span-4"
+          >
+            <div className="text-5xl mb-4">💼</div>
+            <h2 className="text-2xl font-bold mb-2">Nómina</h2>
+            <p className="text-indigo-100 text-sm">
+              Recibos quincenales, vales con foto y envío WhatsApp con enlace personalizado
+            </p>
+          </button>
         </div>
 
         {/* Información adicional */}

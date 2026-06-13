@@ -13,7 +13,9 @@ import whatsappSendersRouter from "./routes/whatsapp-senders";
 import migrateRouter from "./routes/migrate";
 // import checkSandboxRouter from "./routes/check-sandbox"; // Deshabilitado: Ya no usamos Sandbox
 import integrationFirebaseRouter from "./routes/integration-firebase";
+import nominaRouter from "./routes/nomina";
 import { startScheduler } from "./services/scheduler";
+import { startNominaScheduler } from "./services/nomina-scheduler";
 
 // Cargar variables de entorno
 dotenv.config();
@@ -79,6 +81,7 @@ app.use("/api/twilio-status", twilioStatusRouter);
 app.use("/api/whatsapp-senders", whatsappSendersRouter);
 // app.use("/api/check-sandbox", checkSandboxRouter); // Deshabilitado: Ya no usamos Sandbox
 app.use("/api/integration", integrationFirebaseRouter);
+app.use("/api/nomina", nominaRouter);
 app.use("/webhooks", webhooksRouter);
 
 // Servir Next.js estático (solo en producción, si existe)
@@ -107,6 +110,7 @@ app.get("/", (req, res) => {
         // checkSandbox: "/api/check-sandbox", // Deshabilitado: Ya no usamos Sandbox
         webhooks: "/webhooks/twilio/whatsapp",
         integrationFirebase: "POST /api/integration/firebase/whatsapp",
+        nomina: "/api/nomina",
         health: "/health",
       },
   });
@@ -141,6 +145,7 @@ async function main() {
     // Iniciar scheduler
     console.log("[INIT] Iniciando scheduler...");
     startScheduler();
+    startNominaScheduler();
     schedulerStarted = true;
     console.log("[INIT] ✅ Scheduler iniciado");
 
