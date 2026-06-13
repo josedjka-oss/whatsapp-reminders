@@ -148,14 +148,16 @@ model NominaVale {
 }
 
 model NominaPeriod {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   year      Int
   month     Int
-  half      Int      // 1 | 2
-  payDay    Int      // 15 o último día del mes
-  status    String   @default("open") // open | closed
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  half      Int       // 1 | 2
+  payDay    Int       // 15 o último día del mes
+  label     String?
+  status    String    @default("open") // open | closed
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   slips NominaSlip[]
 

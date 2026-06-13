@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { formatInTimeZone } from "date-fns-tz";
 import { prisma } from "../db";
 import {
+  createOpenQuincena,
   generateSlipsForPeriod,
   getOrCreateScheduleConfig,
   resolvePeriodHalfForToday,
@@ -33,6 +34,7 @@ export const processNominaAutoSend = async (): Promise<void> => {
 
     console.log(`[NOMINA] Envío automático quincena ${half} — ${ymd}`);
 
+    await createOpenQuincena(year, month, half);
     const { period } = await generateSlipsForPeriod(year, month, half);
     const results = await sendAllSlipsWhatsApp(period.id);
 

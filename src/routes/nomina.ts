@@ -3,11 +3,17 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { requireAuth as requireAdminAuth } from "../middleware/auth";
 import {
+  assertPrestamoGroupEditable,
+  assertValeEditable,
   buildSlipPublicUrl,
+  closeQuincena,
   createNominaValeOrPrestamo,
+  createOpenQuincena,
   generateSlipsForPeriod,
   getOrCreateScheduleConfig,
+  getPeriodDetail,
   getPeriodSummary,
+  getPeriodSummaryById,
   getSlipByToken,
   resolvePeriodHalfForToday,
   sendAllSlipsWhatsApp,
@@ -447,26 +453,44 @@ router.post("/vales", async (req, res) => {
 });
 
 router.delete("/vales/group/:prestamoGroupId", async (req, res) => {
-  const deleted = await prisma.nominaVale.deleteMany({
-    where: { prestamoGroupId: req.params.prestamoGroupId },
-  });
-  return res.json({ ok: true, deleted: deleted.count });
+  try {
+    await assertPrestamoGroupEditable(req.params.prestamoGroupId);
+    const deleted = await prisma.nominaVale.deleteMany({
+      where: { prestamoGroupId: req.params.prestamoGroupId },
+    });
+    return res.json({ ok: true, deleted: deleted.count });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
 });
 
 router.delete("/vales/:id", async (req, res) => {
-  await prisma.nominaVale.delete({ where: { id: req.params.id } });
-  return res.json({ ok: true });
+  try {
+    await assertValeEditable(req.params.id);
+    await prisma.nominaVale.delete({ where: { id: req.params.id } });
+    return res.json({ ok: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
 });
 
 // --- Resumen quincenal ---
 router.get("/summary", async (req, res) => {
   try {
+    const periodId = req.query.periodId ? String(req.query.periodId) : null;
+    if (periodId) {
+      const summary = await getPeriodSummaryById(periodId);
+      return res.json(summary);
+    }
+
     const year = Number(req.query.year);
     const month = Number(req.query.month);
     const half = Number(req.query.half) as 1 | 2;
     if (!year || !month || (half !== 1 && half !== 2)) {
       return res.status(400).json({
-        error: "year, month y half (1|2) son requeridos",
+        error: "periodId o (year, month y half) son requeridos",
       });
     }
     const summary = await getPeriodSummary(year, month, half);
@@ -483,7 +507,36 @@ router.get("/periods", async (_req, res) => {
     orderBy: [{ year: "desc" }, { month: "desc" }, { half: "desc" }],
     include: { _count: { select: { slips: true } } },
   });
-  return res.json(periods);
+  return res.json(
+    periods.map((p) => ({
+      ...p,
+      periodLabel: p.label ?? `${p.year}-${String(p.month).padStart(2, "0")} Q${p.half}`,
+    }))
+  );
+});
+
+router.post("/periods/open", async (req, res) => {
+  try {
+    const { year, month, half } = req.body ?? {};
+    if (!year || !month || !half) {
+      return res.status(400).json({ error: "year, month y half son requeridos" });
+    }
+    const period = await createOpenQuincena(
+      Number(year),
+      Number(month),
+      Number(half) as 1 | 2
+    );
+    return res.status(201).json({
+      period: {
+        ...period,
+        periodLabel: period.label,
+      },
+      created: true,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
 });
 
 router.post("/periods/generate", async (req, res) => {
@@ -516,6 +569,32 @@ router.get("/periods/current-half", async (_req, res) => {
   return res.json({ year, month, day, half });
 });
 
+router.get("/periods/:id", async (req, res) => {
+  try {
+    const detail = await getPeriodDetail(req.params.id);
+    return res.json(detail);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(404).json({ error: message });
+  }
+});
+
+router.post("/periods/:id/close", async (req, res) => {
+  try {
+    const period = await closeQuincena(req.params.id);
+    return res.json({
+      ok: true,
+      period: {
+        ...period,
+        periodLabel: period.label,
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
 router.get("/periods/:id/slips", async (req, res) => {
   const slips = await prisma.nominaSlip.findMany({
     where: { periodId: req.params.id },
@@ -546,6 +625,9 @@ router.post("/periods/:id/regenerate", async (req, res) => {
     const period = await prisma.nominaPeriod.findUniqueOrThrow({
       where: { id: req.params.id },
     });
+    if (period.status === "closed") {
+      return res.status(400).json({ error: "No se puede recalcular una quincena cerrada." });
+    }
     const employees = await prisma.nominaEmployee.findMany({ where: { isActive: true } });
     const slips = [];
     for (const e of employees) {

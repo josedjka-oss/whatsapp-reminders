@@ -8,6 +8,13 @@ export default function NominaHomePage() {
 
   const cards = [
     {
+      title: "Quincenas",
+      desc: "Crear quincena a quincena, historial, vales, recibos y cierre",
+      href: "/nomina/quincenas",
+      emoji: "📅",
+      color: "from-emerald-500 to-emerald-600",
+    },
+    {
       title: "Empleados",
       desc: "Salario, bonificación, descuentos fijos y teléfono WhatsApp",
       href: "/nomina/empleados",
@@ -22,25 +29,11 @@ export default function NominaHomePage() {
       color: "from-violet-500 to-violet-600",
     },
     {
-      title: "Resumen quincena",
-      desc: "Salario+transporte neto y bonificación neta por empleado",
-      href: "/nomina/resumen",
-      emoji: "📊",
-      color: "from-sky-500 to-sky-600",
-    },
-    {
       title: "Vales y préstamos",
       desc: "Vales con foto o préstamos repartidos en varias quincenas",
       href: "/nomina/vales",
       emoji: "🧾",
       color: "from-amber-500 to-amber-600",
-    },
-    {
-      title: "Quincenas y envíos",
-      desc: "Generar recibos, enviar WhatsApp a todos o programar auto",
-      href: "/nomina/periodos",
-      emoji: "📤",
-      color: "from-emerald-500 to-emerald-600",
     },
   ];
 
@@ -72,9 +65,9 @@ export default function NominaHomePage() {
         </div>
 
         <div className="mt-8 bg-white rounded-lg shadow-md p-6 text-gray-600 text-sm space-y-2">
-          <p>✅ Pagos quincenales: día <strong>15</strong> y <strong>último día del mes</strong> (28–31).</p>
+          <p>✅ Crea cada quincena (15 y fin de mes) por separado y ciérrala para guardar el historial.</p>
           <p>✅ Cada empleado recibe un enlace único para ver su recibo y fotos de vales.</p>
-          <p>✅ El envío automático usa la hora configurada en Quincenas (por defecto 9:00 a.m. Bogotá).</p>
+          <p>✅ Los préstamos en cuotas se descuentan automáticamente en las quincenas siguientes.</p>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { NavigationHeader } from "@/components/NavigationHeader";
 
 type Employee = { id: string; name: string };
@@ -29,12 +30,29 @@ const formatCop = (n: number) =>
   }).format(n);
 
 export default function NominaValesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 p-6">Cargando…</div>}>
+      <NominaValesContent />
+    </Suspense>
+  );
+}
+
+function NominaValesContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const periodId = searchParams.get("periodId");
   const now = new Date();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vales, setVales] = useState<Vale[]>([]);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [half, setHalf] = useState(now.getDate() <= 15 ? 1 : 2);
+  const [year, setYear] = useState(
+    Number(searchParams.get("year")) || now.getFullYear()
+  );
+  const [month, setMonth] = useState(
+    Number(searchParams.get("month")) || now.getMonth() + 1
+  );
+  const [half, setHalf] = useState(
+    Number(searchParams.get("half")) || (now.getDate() <= 15 ? 1 : 2)
+  );
   const [entryKind, setEntryKind] = useState<"VALE" | "PRESTAMO">("VALE");
   const [form, setForm] = useState({
     employeeId: "",
@@ -159,6 +177,19 @@ export default function NominaValesPage() {
     <div className="min-h-screen bg-gray-50">
       <NavigationHeader title="Nómina — Vales y préstamos" />
       <div className="max-w-4xl mx-auto p-6 space-y-6">
+        {periodId && (
+          <button
+            type="button"
+            className="text-sm text-indigo-600"
+            onClick={() => router.push(`/nomina/quincenas/${periodId}`)}
+          >
+            ← Volver a la quincena
+          </button>
+        )}
+        <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-amber-900">
+          La quincena debe estar <strong>creada y abierta</strong> antes de registrar vales o préstamos.
+          Las cuotas de préstamos se aplican automáticamente en las quincenas siguientes.
+        </div>
         <div className="bg-white rounded-lg shadow p-6 grid grid-cols-3 gap-3">
           <label className="text-sm">
             Año

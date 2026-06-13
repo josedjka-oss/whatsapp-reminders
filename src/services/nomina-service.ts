@@ -76,11 +76,251 @@ export const getOrCreateScheduleConfig = async () => {
 
 export const getOrCreatePeriod = async (year: number, month: number, half: 1 | 2) => {
   const payDay = half === 1 ? 15 : lastDayOfMonth(new Date(year, month - 1, 1)).getDate();
+  const label = getPeriodLabel(year, month, half);
   return prisma.nominaPeriod.upsert({
     where: { year_month_half: { year, month, half } },
     update: {},
-    create: { year, month, half, payDay, status: "open" },
+    create: { year, month, half, payDay, label, status: "open" },
   });
+};
+
+export const createOpenQuincena = async (year: number, month: number, half: 1 | 2) => {
+  const existing = await prisma.nominaPeriod.findUnique({
+    where: { year_month_half: { year, month, half } },
+  });
+  if (existing) {
+    if (existing.status === "closed") {
+      throw new Error(
+        `La quincena ${getPeriodLabel(year, month, half)} ya está cerrada. No se puede reabrir.`
+      );
+    }
+    return existing;
+  }
+  const payDay = half === 1 ? 15 : lastDayOfMonth(new Date(year, month - 1, 1)).getDate();
+  const label = getPeriodLabel(year, month, half);
+  return prisma.nominaPeriod.create({
+    data: { year, month, half, payDay, label, status: "open" },
+  });
+};
+
+export const assertQuincenaOpenForEditing = async (q: {
+  year: number;
+  month: number;
+  half: 1 | 2;
+}) => {
+  const period = await prisma.nominaPeriod.findUnique({
+    where: { year_month_half: { year: q.year, month: q.month, half: q.half } },
+  });
+  if (!period) {
+    throw new Error(
+      `Crea la quincena ${getPeriodLabel(q.year, q.month, q.half)} antes de registrar vales o préstamos.`
+    );
+  }
+  if (period.status === "closed") {
+    throw new Error(
+      `La quincena ${getPeriodLabel(q.year, q.month, q.half)} está cerrada y no se puede modificar.`
+    );
+  }
+};
+
+export const assertQuincenaCanReceiveInstallment = async (q: {
+  year: number;
+  month: number;
+  half: 1 | 2;
+}) => {
+  const period = await prisma.nominaPeriod.findUnique({
+    where: { year_month_half: { year: q.year, month: q.month, half: q.half } },
+  });
+  if (period?.status === "closed") {
+    throw new Error(
+      `La quincena ${getPeriodLabel(q.year, q.month, q.half)} está cerrada y no se puede modificar.`
+    );
+  }
+};
+
+export const assertQuincenasOpen = async (
+  quincenas: Array<{ year: number; month: number; half: 1 | 2 }>
+) => {
+  for (const q of quincenas) {
+    await assertQuincenaOpenForEditing(q);
+  }
+};
+
+export const closeQuincena = async (periodId: string) => {
+  const period = await prisma.nominaPeriod.findUniqueOrThrow({
+    where: { id: periodId },
+  });
+  if (period.status === "closed") {
+    throw new Error("Esta quincena ya está cerrada.");
+  }
+
+  const employees = await prisma.nominaEmployee.findMany({
+    where: { isActive: true },
+  });
+
+  for (const employee of employees) {
+    await upsertSlipForEmployee(employee.id, periodId);
+  }
+
+  return prisma.nominaPeriod.update({
+    where: { id: periodId },
+    data: {
+      status: "closed",
+      closedAt: new Date(),
+      label: getPeriodLabel(period.year, period.month, period.half),
+    },
+    include: { _count: { select: { slips: true } } },
+  });
+};
+
+const summaryRowFromSlip = (slip: {
+  employeeId: string;
+  employee: { name: string };
+  grossSalary: Prisma.Decimal;
+  grossTransport: Prisma.Decimal;
+  grossBonus: Prisma.Decimal;
+  salaryDiscounts: Prisma.Decimal;
+  bonusDiscounts: Prisma.Decimal;
+  netBonus: Prisma.Decimal;
+  netOvertime: Prisma.Decimal;
+  breakdown: unknown;
+}) => {
+  const breakdown = slip.breakdown as { netSalaryWithTransport?: number } | null;
+  const netSalaryWithTransport =
+    breakdown?.netSalaryWithTransport ??
+    Math.max(
+      0,
+      toMoney(slip.grossSalary) +
+        toMoney(slip.grossTransport) -
+        toMoney(slip.salaryDiscounts)
+    );
+
+  return {
+    employeeId: slip.employeeId,
+    name: slip.employee.name,
+    grossSalary: toMoney(slip.grossSalary),
+    grossTransport: toMoney(slip.grossTransport),
+    grossBonus: toMoney(slip.grossBonus),
+    salaryDiscounts: toMoney(slip.salaryDiscounts),
+    bonusDiscounts: toMoney(slip.bonusDiscounts),
+    netSalaryWithTransport,
+    netBonus: toMoney(slip.netBonus),
+    netOvertime: toMoney(slip.netOvertime),
+  };
+};
+
+export const getPeriodSummaryById = async (periodId: string) => {
+  const period = await prisma.nominaPeriod.findUniqueOrThrow({
+    where: { id: periodId },
+  });
+
+  const periodLabel =
+    period.label ?? getPeriodLabel(period.year, period.month, period.half);
+
+  if (period.status === "closed") {
+    const slips = await prisma.nominaSlip.findMany({
+      where: { periodId },
+      include: { employee: { select: { name: true } } },
+      orderBy: { employee: { name: "asc" } },
+    });
+    return {
+      period: {
+        id: period.id,
+        year: period.year,
+        month: period.month,
+        half: period.half,
+        payDay: period.payDay,
+        status: period.status,
+        closedAt: period.closedAt,
+      },
+      periodLabel,
+      frozen: true,
+      rows: slips.map(summaryRowFromSlip),
+    };
+  }
+
+  const employees = await prisma.nominaEmployee.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = [];
+  for (const employee of employees) {
+    const computed = await computeSlipBreakdown(employee.id, period.id);
+    rows.push({
+      employeeId: employee.id,
+      name: employee.name,
+      grossSalary: computed.grossSalary,
+      grossTransport: computed.grossTransport,
+      grossBonus: computed.grossBonus,
+      salaryDiscounts: computed.salaryDiscounts,
+      bonusDiscounts: computed.bonusDiscounts,
+      netSalaryWithTransport: computed.netSalaryWithTransport,
+      netBonus: computed.netBonus,
+      netOvertime: computed.netOvertime,
+    });
+  }
+
+  return {
+    period: {
+      id: period.id,
+      year: period.year,
+      month: period.month,
+      half: period.half,
+      payDay: period.payDay,
+      status: period.status,
+      closedAt: period.closedAt,
+    },
+    periodLabel,
+    frozen: false,
+    rows,
+  };
+};
+
+export const getPeriodDetail = async (periodId: string) => {
+  const period = await prisma.nominaPeriod.findUniqueOrThrow({
+    where: { id: periodId },
+    include: {
+      _count: { select: { slips: true } },
+    },
+  });
+
+  const [summary, vales, prestamoInstallments] = await Promise.all([
+    getPeriodSummaryById(periodId),
+    prisma.nominaVale.findMany({
+      where: {
+        year: period.year,
+        month: period.month,
+        half: period.half,
+      },
+      include: { employee: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.nominaVale.count({
+      where: {
+        year: period.year,
+        month: period.month,
+        half: period.half,
+        kind: "PRESTAMO",
+      },
+    }),
+  ]);
+
+  return {
+    period: {
+      ...period,
+      periodLabel:
+        period.label ?? getPeriodLabel(period.year, period.month, period.half),
+    },
+    summary,
+    valesCount: vales.length,
+    prestamoInstallmentsCount: prestamoInstallments,
+    vales: vales.map((v) => ({
+      ...v,
+      amount: toMoney(v.amount),
+      totalPrestamoAmount: v.totalPrestamoAmount ? toMoney(v.totalPrestamoAmount) : null,
+    })),
+  };
 };
 
 const sumByTarget = (
@@ -240,6 +480,15 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
 };
 
 export const upsertSlipForEmployee = async (employeeId: string, periodId: string) => {
+  const period = await prisma.nominaPeriod.findUniqueOrThrow({
+    where: { id: periodId },
+  });
+  if (period.status === "closed") {
+    throw new Error(
+      `La quincena ${getPeriodLabel(period.year, period.month, period.half)} está cerrada.`
+    );
+  }
+
   const computed = await computeSlipBreakdown(employeeId, periodId);
 
   return prisma.nominaSlip.upsert({
@@ -284,7 +533,20 @@ export const upsertSlipForEmployee = async (employeeId: string, periodId: string
 };
 
 export const generateSlipsForPeriod = async (year: number, month: number, half: 1 | 2) => {
-  const period = await getOrCreatePeriod(year, month, half);
+  const period = await prisma.nominaPeriod.findUnique({
+    where: { year_month_half: { year, month, half } },
+  });
+  if (!period) {
+    throw new Error(
+      `No existe la quincena ${getPeriodLabel(year, month, half)}. Créala primero.`
+    );
+  }
+  if (period.status === "closed") {
+    throw new Error(
+      `La quincena ${getPeriodLabel(year, month, half)} está cerrada. Los recibos ya están congelados.`
+    );
+  }
+
   const employees = await prisma.nominaEmployee.findMany({
     where: { isActive: true },
   });
@@ -408,6 +670,12 @@ export const createNominaValeOrPrestamo = async (input: CreateValeInput) => {
   const appliesTo = input.appliesTo;
 
   if (kind === "VALE") {
+    await assertQuincenaOpenForEditing({
+      year: input.year,
+      month: input.month,
+      half: input.half,
+    });
+
     const vale = await prisma.nominaVale.create({
       data: {
         employeeId: input.employeeId,
@@ -441,6 +709,15 @@ export const createNominaValeOrPrestamo = async (input: CreateValeInput) => {
     input.half,
     installmentCount
   );
+  await assertQuincenaOpenForEditing({
+    year: input.year,
+    month: input.month,
+    half: input.half,
+  });
+  for (const q of sequence) {
+    await assertQuincenaCanReceiveInstallment(q);
+  }
+
   const prestamoGroupId = randomUUID();
 
   const installments = [];
@@ -471,37 +748,45 @@ export const createNominaValeOrPrestamo = async (input: CreateValeInput) => {
   return { kind: "PRESTAMO" as const, prestamoGroupId, installments };
 };
 
+export const assertValeEditable = async (valeId: string) => {
+  const vale = await prisma.nominaVale.findUniqueOrThrow({ where: { id: valeId } });
+  await assertQuincenaCanReceiveInstallment({
+    year: vale.year,
+    month: vale.month,
+    half: vale.half as 1 | 2,
+  });
+  return vale;
+};
+
+export const assertPrestamoGroupEditable = async (prestamoGroupId: string) => {
+  const installments = await prisma.nominaVale.findMany({
+    where: { prestamoGroupId },
+  });
+  if (installments.length === 0) {
+    throw new Error("Préstamo no encontrado");
+  }
+  for (const i of installments) {
+    await assertQuincenaCanReceiveInstallment({
+      year: i.year,
+      month: i.month,
+      half: i.half as 1 | 2,
+    });
+  }
+  return installments;
+};
+
 export const getPeriodSummary = async (
   year: number,
   month: number,
   half: 1 | 2
 ) => {
-  const period = await getOrCreatePeriod(year, month, half);
-  const employees = await prisma.nominaEmployee.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
+  const period = await prisma.nominaPeriod.findUnique({
+    where: { year_month_half: { year, month, half } },
   });
-
-  const rows = [];
-  for (const employee of employees) {
-    const computed = await computeSlipBreakdown(employee.id, period.id);
-    rows.push({
-      employeeId: employee.id,
-      name: employee.name,
-      grossSalary: computed.grossSalary,
-      grossTransport: computed.grossTransport,
-      grossBonus: computed.grossBonus,
-      salaryDiscounts: computed.salaryDiscounts,
-      bonusDiscounts: computed.bonusDiscounts,
-      netSalaryWithTransport: computed.netSalaryWithTransport,
-      netBonus: computed.netBonus,
-      netOvertime: computed.netOvertime,
-    });
+  if (!period) {
+    throw new Error(
+      `No existe la quincena ${getPeriodLabel(year, month, half)}. Créala primero en Quincenas.`
+    );
   }
-
-  return {
-    period: { id: period.id, year, month, half, payDay: period.payDay },
-    periodLabel: getPeriodLabel(year, month, half),
-    rows,
-  };
+  return getPeriodSummaryById(period.id);
 };
