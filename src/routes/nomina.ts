@@ -4,8 +4,10 @@ import { prisma } from "../db";
 import { requireAuth as requireAdminAuth } from "../middleware/auth";
 import {
   buildSlipPublicUrl,
+  createNominaValeOrPrestamo,
   generateSlipsForPeriod,
   getOrCreateScheduleConfig,
+  getPeriodSummary,
   getSlipByToken,
   resolvePeriodHalfForToday,
   sendAllSlipsWhatsApp,
@@ -384,10 +386,14 @@ router.post("/vales", async (req, res) => {
       employeeId,
       holderName,
       amount,
+      totalAmount,
       appliesTo,
       year,
       month,
       half,
+      kind,
+      installmentCount,
+      quincenas,
       photoBase64,
       photoUrl,
       notes,
@@ -400,38 +406,75 @@ router.post("/vales", async (req, res) => {
       return res.status(400).json({ error: "year, month y half son requeridos" });
     }
 
-    let finalPhotoUrl = photoUrl ? String(photoUrl) : "";
+    const entryKind =
+      String(kind ?? "VALE").toUpperCase() === "PRESTAMO" ? "PRESTAMO" : "VALE";
+
+    let finalPhotoUrl: string | null = photoUrl ? String(photoUrl) : null;
     if (photoBase64) {
       finalPhotoUrl = await uploadValePhoto(String(photoBase64));
     }
-    if (!finalPhotoUrl) {
-      return res.status(400).json({ error: "photoBase64 o photoUrl es requerido" });
+    if (entryKind === "VALE" && !finalPhotoUrl) {
+      return res.status(400).json({ error: "Los vales requieren foto (photoBase64)" });
     }
 
-    const vale = await prisma.nominaVale.create({
-      data: {
-        employeeId: String(employeeId),
-        holderName: String(holderName).trim(),
-        amount: parseMoney(amount, "amount"),
-        appliesTo: parseAppliesTo(appliesTo),
-        year: Number(year),
-        month: Number(month),
-        half: Number(half),
-        photoUrl: finalPhotoUrl,
-        notes: notes ? String(notes) : null,
-      },
-      include: { employee: { select: { id: true, name: true } } },
+    const money =
+      entryKind === "PRESTAMO"
+        ? parseMoney(totalAmount ?? amount, "totalAmount")
+        : parseMoney(amount, "amount");
+
+    const installmentsRaw = installmentCount ?? quincenas ?? 1;
+    const installments = Math.max(1, Math.min(36, Number(installmentsRaw) || 1));
+
+    const result = await createNominaValeOrPrestamo({
+      employeeId: String(employeeId),
+      holderName: String(holderName),
+      amount: money,
+      appliesTo: parseAppliesTo(appliesTo),
+      year: Number(year),
+      month: Number(month),
+      half: Number(half) as 1 | 2,
+      kind: entryKind,
+      installmentCount: installments,
+      photoUrl: finalPhotoUrl,
+      notes: notes ? String(notes) : null,
     });
-    return res.status(201).json(vale);
+
+    return res.status(201).json(result);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     return res.status(400).json({ error: message });
   }
 });
 
+router.delete("/vales/group/:prestamoGroupId", async (req, res) => {
+  const deleted = await prisma.nominaVale.deleteMany({
+    where: { prestamoGroupId: req.params.prestamoGroupId },
+  });
+  return res.json({ ok: true, deleted: deleted.count });
+});
+
 router.delete("/vales/:id", async (req, res) => {
   await prisma.nominaVale.delete({ where: { id: req.params.id } });
   return res.json({ ok: true });
+});
+
+// --- Resumen quincenal ---
+router.get("/summary", async (req, res) => {
+  try {
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    const half = Number(req.query.half) as 1 | 2;
+    if (!year || !month || (half !== 1 && half !== 2)) {
+      return res.status(400).json({
+        error: "year, month y half (1|2) son requeridos",
+      });
+    }
+    const summary = await getPeriodSummary(year, month, half);
+    return res.json(summary);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
 });
 
 // --- Periodos y recibos ---

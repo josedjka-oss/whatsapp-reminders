@@ -22,8 +22,15 @@ export default function NominaHomePage() {
       color: "from-violet-500 to-violet-600",
     },
     {
-      title: "Vales",
-      desc: "Registrar vales con foto, valor y a quién corresponde",
+      title: "Resumen quincena",
+      desc: "Salario+transporte neto y bonificación neta por empleado",
+      href: "/nomina/resumen",
+      emoji: "📊",
+      color: "from-sky-500 to-sky-600",
+    },
+    {
+      title: "Vales y préstamos",
+      desc: "Vales con foto o préstamos repartidos en varias quincenas",
       href: "/nomina/vales",
       emoji: "🧾",
       color: "from-amber-500 to-amber-600",

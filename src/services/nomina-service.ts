@@ -5,7 +5,11 @@ import { es } from "date-fns/locale";
 import { prisma } from "../db";
 import { sendWhatsAppMessage } from "./twilio";
 import { uploadBufferToCloudinary, isCloudinaryConfigured } from "./cloudinary-upload";
-import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
+import { randomUUID } from "crypto";
+import {
+  generateQuincenaSequence,
+  splitPrestamoInstallments,
+} from "../utils/nomina-quincena";
 import {
   BonusFrequency,
   calculateDaytimeOvertimePay,
@@ -16,6 +20,7 @@ import {
   hourlyRateFromMonthlySalary,
   normalizeBonusFrequency,
 } from "../utils/nomina-calculations";
+import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 
@@ -150,7 +155,11 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
   const netTransport = grossTransport;
   const netBonus = Math.max(0, grossBonus - bonusDiscounts);
   const netOvertime = grossOvertime;
-  const netTotal = netSalary + netTransport + netBonus + netOvertime;
+  const netSalaryWithTransport = Math.max(
+    0,
+    grossSalary + grossTransport - salaryDiscounts
+  );
+  const netTotal = netSalaryWithTransport + netBonus + netOvertime;
 
   const breakdown = {
     employeeName: employee.name,
@@ -174,6 +183,7 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     netTransport,
     netBonus,
     netOvertime,
+    netSalaryWithTransport,
     netTotal,
     overtime: {
       daytimeHours,
@@ -195,11 +205,18 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     })),
     vales: vales.map((v) => ({
       id: v.id,
+      kind: v.kind,
       holderName: v.holderName,
       amount: toMoney(v.amount),
       appliesTo: v.appliesTo,
       photoUrl: v.photoUrl,
       notes: v.notes,
+      installmentNumber: v.installmentNumber,
+      installmentTotal: v.installmentTotal,
+      totalPrestamoAmount: v.totalPrestamoAmount
+        ? toMoney(v.totalPrestamoAmount)
+        : null,
+      prestamoGroupId: v.prestamoGroupId,
     })),
   };
 
@@ -216,6 +233,7 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     netTransport,
     netBonus,
     netOvertime,
+    netSalaryWithTransport,
     netTotal,
     breakdown,
   };
@@ -369,4 +387,121 @@ export const getSlipByToken = async (accessToken: string) => {
       period: true,
     },
   });
+};
+
+export type CreateValeInput = {
+  employeeId: string;
+  holderName: string;
+  amount: number;
+  appliesTo: "SALARY" | "BONUS";
+  year: number;
+  month: number;
+  half: 1 | 2;
+  kind?: "VALE" | "PRESTAMO";
+  installmentCount?: number;
+  photoUrl?: string | null;
+  notes?: string | null;
+};
+
+export const createNominaValeOrPrestamo = async (input: CreateValeInput) => {
+  const kind = input.kind === "PRESTAMO" ? "PRESTAMO" : "VALE";
+  const appliesTo = input.appliesTo;
+
+  if (kind === "VALE") {
+    const vale = await prisma.nominaVale.create({
+      data: {
+        employeeId: input.employeeId,
+        kind: "VALE",
+        holderName: input.holderName.trim(),
+        amount: input.amount,
+        appliesTo,
+        year: input.year,
+        month: input.month,
+        half: input.half,
+        photoUrl: input.photoUrl ?? null,
+        notes: input.notes ?? null,
+      },
+      include: { employee: { select: { id: true, name: true } } },
+    });
+    return { kind: "VALE" as const, vale };
+  }
+
+  const installmentCount = Math.max(
+    1,
+    Math.min(36, Math.round(input.installmentCount ?? 1))
+  );
+  const totalAmount = input.amount;
+  const installmentAmounts = splitPrestamoInstallments(
+    totalAmount,
+    installmentCount
+  );
+  const sequence = generateQuincenaSequence(
+    input.year,
+    input.month,
+    input.half,
+    installmentCount
+  );
+  const prestamoGroupId = randomUUID();
+
+  const installments = [];
+  for (let i = 0; i < installmentCount; i++) {
+    const q = sequence[i];
+    const row = await prisma.nominaVale.create({
+      data: {
+        employeeId: input.employeeId,
+        kind: "PRESTAMO",
+        holderName: input.holderName.trim(),
+        amount: installmentAmounts[i],
+        appliesTo,
+        year: q.year,
+        month: q.month,
+        half: q.half,
+        photoUrl: input.photoUrl ?? null,
+        notes: input.notes ?? null,
+        prestamoGroupId,
+        installmentNumber: i + 1,
+        installmentTotal: installmentCount,
+        totalPrestamoAmount: totalAmount,
+      },
+      include: { employee: { select: { id: true, name: true } } },
+    });
+    installments.push(row);
+  }
+
+  return { kind: "PRESTAMO" as const, prestamoGroupId, installments };
+};
+
+export const getPeriodSummary = async (
+  year: number,
+  month: number,
+  half: 1 | 2
+) => {
+  const period = await getOrCreatePeriod(year, month, half);
+  const employees = await prisma.nominaEmployee.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = [];
+  for (const employee of employees) {
+    const computed = await computeSlipBreakdown(employee.id, period.id);
+    rows.push({
+      employeeId: employee.id,
+      name: employee.name,
+      grossSalary: computed.grossSalary,
+      grossTransport: computed.grossTransport,
+      grossBonus: computed.grossBonus,
+      salaryDiscounts: computed.salaryDiscounts,
+      bonusDiscounts: computed.bonusDiscounts,
+      netSalaryWithTransport: computed.netSalaryWithTransport,
+      netBonus: computed.netBonus,
+      netOvertime: computed.netOvertime,
+    });
+  }
+
+  return {
+    period: { id: period.id, year, month, half, payDay: period.payDay },
+    periodLabel: getPeriodLabel(year, month, half),
+    rows,
+  };
 };
