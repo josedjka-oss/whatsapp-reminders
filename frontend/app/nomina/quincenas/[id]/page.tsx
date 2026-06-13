@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { NavigationHeader } from "@/components/NavigationHeader";
+import {
+  NominaSlipPreviewModal,
+  type SlipPreviewData,
+} from "@/components/NominaSlipPreviewModal";
 
 type SummaryRow = {
   employeeId: string;
@@ -23,12 +27,7 @@ type Vale = {
   employee: { name: string };
 };
 
-type Slip = {
-  id: string;
-  employeeId: string;
-  employee: { name: string; phone: string | null };
-  netTotal: number;
-  publicUrl: string;
+type Slip = SlipPreviewData & {
   whatsappSentAt: string | null;
 };
 
@@ -70,6 +69,10 @@ export default function NominaQuincenaWorkspacePage() {
   const [busy, setBusy] = useState(false);
   const [busyEmployeeId, setBusyEmployeeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewSlip, setPreviewSlip] = useState<SlipPreviewData | null>(null);
+  const [previewNotice, setPreviewNotice] = useState<string | null>(null);
+  const [previewSending, setPreviewSending] = useState(false);
+  const [previewCanSend, setPreviewCanSend] = useState(true);
 
   const load = useCallback(async () => {
     setError(null);
@@ -164,6 +167,21 @@ export default function NominaQuincenaWorkspacePage() {
     }
   };
 
+  const openPreview = (
+    slip: SlipPreviewData,
+    options?: { notice?: string; canSend?: boolean }
+  ) => {
+    setPreviewSlip(slip);
+    setPreviewNotice(options?.notice ?? null);
+    setPreviewCanSend(options?.canSend ?? !isClosed);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewSlip(null);
+    setPreviewNotice(null);
+    setPreviewSending(false);
+  };
+
   const handleGenerateOne = async (employeeId: string) => {
     setBusyEmployeeId(employeeId);
     try {
@@ -179,47 +197,76 @@ export default function NominaQuincenaWorkspacePage() {
       }
       await loadSlips();
       await load();
+      if (data.slip) {
+        openPreview(data.slip, {
+          notice: "Recibo generado. Revisa la vista previa antes de enviar.",
+        });
+      }
     } finally {
       setBusyEmployeeId(null);
     }
   };
 
-  const handleGenerateAndSendOne = async (employeeId: string, slipId?: string) => {
+  const handleGenerateAndSendOne = async (employeeId: string) => {
     setBusyEmployeeId(employeeId);
     try {
-      let targetSlipId = slipId;
-      if (!targetSlipId) {
-        const genRes = await fetch(`/api/nomina/periods/${periodId}/slips/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId }),
-        });
-        const genData = await genRes.json();
-        if (!genRes.ok) {
-          alert(genData.error || "Error al generar recibo");
-          return;
-        }
-        targetSlipId = genData.slip?.id;
-      }
-
-      if (!targetSlipId) {
-        alert("No se pudo obtener el recibo");
-        return;
-      }
-
-      const sendRes = await fetch(`/api/nomina/slips/${targetSlipId}/send-whatsapp`, {
+      const res = await fetch(`/api/nomina/periods/${periodId}/slips/generate-and-send`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId }),
       });
-      const sendData = await sendRes.json();
-      if (!sendRes.ok) {
-        alert(sendData.error || "Error al enviar WhatsApp");
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Error al generar y enviar");
         return;
       }
-      alert("Recibo generado y WhatsApp enviado");
       await loadSlips();
       await load();
+      if (data.slip) {
+        openPreview(data.slip, {
+          notice: `WhatsApp enviado a ${data.whatsapp?.to ?? "el empleado"}.`,
+          canSend: true,
+        });
+      }
     } finally {
       setBusyEmployeeId(null);
+    }
+  };
+
+  const handlePreviewExisting = async (slipId: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/nomina/slips/${slipId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Error");
+        return;
+      }
+      openPreview(data);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSendFromPreview = async () => {
+    if (!previewSlip) return;
+    setPreviewSending(true);
+    try {
+      const res = await fetch(`/api/nomina/slips/${previewSlip.id}/send-whatsapp`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Error al enviar WhatsApp");
+        return;
+      }
+      await loadSlips();
+      if (data.slip) {
+        setPreviewSlip(data.slip);
+        setPreviewNotice(`WhatsApp enviado a ${data.to ?? "el empleado"}.`);
+      }
+    } finally {
+      setPreviewSending(false);
     }
   };
 
@@ -429,23 +476,31 @@ export default function NominaQuincenaWorkspacePage() {
                                       type="button"
                                       disabled={rowBusy || busy}
                                       className="px-2 py-1 bg-green-700 text-white rounded text-xs disabled:opacity-50"
-                                      onClick={() =>
-                                        void handleGenerateAndSendOne(row.employeeId, slip?.id)
-                                      }
+                                      onClick={() => void handleGenerateAndSendOne(row.employeeId)}
                                     >
-                                      {slip ? "Enviar WhatsApp" : "Generar y enviar"}
+                                      Generar y enviar
                                     </button>
                                   </>
                                 )}
                                 {slip && (
-                                  <a
-                                    href={slip.publicUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-2 py-1 text-indigo-600 text-xs inline-flex items-center"
-                                  >
-                                    Ver recibo
-                                  </a>
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={rowBusy || busy}
+                                      className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs disabled:opacity-50"
+                                      onClick={() => void handlePreviewExisting(slip.id)}
+                                    >
+                                      Vista previa
+                                    </button>
+                                    <a
+                                      href={slip.publicUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2 py-1 text-indigo-600 text-xs inline-flex items-center"
+                                    >
+                                      Ver recibo
+                                    </a>
+                                  </>
                                 )}
                               </div>
                             </td>
@@ -460,6 +515,16 @@ export default function NominaQuincenaWorkspacePage() {
           </>
         )}
       </div>
+
+      <NominaSlipPreviewModal
+        slip={previewSlip}
+        open={Boolean(previewSlip)}
+        onClose={handleClosePreview}
+        onSendWhatsApp={() => void handleSendFromPreview()}
+        sending={previewSending}
+        notice={previewNotice}
+        canSend={previewCanSend}
+      />
     </div>
   );
 }

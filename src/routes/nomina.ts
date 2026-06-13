@@ -10,6 +10,7 @@ import {
   createNominaValeOrPrestamo,
   createOpenQuincena,
   generateSlipsForPeriod,
+  generateAndSendSlipForEmployee,
   getOrCreateScheduleConfig,
   getPeriodDetail,
   getPeriodSummary,
@@ -18,6 +19,7 @@ import {
   resolvePeriodHalfForToday,
   sendAllSlipsWhatsApp,
   sendSlipWhatsApp,
+  serializeNominaSlipForApi,
   uploadValePhoto,
   upsertSlipForEmployee,
 } from "../services/nomina-service";
@@ -611,12 +613,36 @@ router.post("/periods/:id/slips/generate", async (req, res) => {
 
     const slip = await upsertSlipForEmployee(String(employeeId), period.id);
     return res.json({
-      slip: {
-        ...slip,
-        employeeId: slip.employeeId,
-        publicUrl: buildSlipPublicUrl(slip.accessToken),
-        netTotal: Number(slip.netTotal),
-      },
+      slip: serializeNominaSlipForApi(slip),
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.post("/periods/:id/slips/generate-and-send", async (req, res) => {
+  try {
+    const { employeeId } = req.body ?? {};
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId es requerido" });
+    }
+
+    const period = await prisma.nominaPeriod.findUniqueOrThrow({
+      where: { id: req.params.id },
+    });
+    if (period.status === "closed") {
+      return res.status(400).json({ error: "No se puede enviar recibos en una quincena cerrada." });
+    }
+
+    const { slip, whatsapp } = await generateAndSendSlipForEmployee(
+      String(employeeId),
+      period.id
+    );
+    return res.json({
+      ok: true,
+      slip: serializeNominaSlipForApi(slip),
+      whatsapp,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
@@ -631,23 +657,21 @@ router.get("/periods/:id/slips", async (req, res) => {
     orderBy: { employee: { name: "asc" } },
   });
   return res.json(
-    slips.map((s) => ({
-      ...s,
-      employeeId: s.employeeId,
-      publicUrl: buildSlipPublicUrl(s.accessToken),
-      grossSalary: Number(s.grossSalary),
-      grossTransport: Number(s.grossTransport),
-      grossBonus: Number(s.grossBonus),
-      grossOvertime: Number(s.grossOvertime),
-      salaryDiscounts: Number(s.salaryDiscounts),
-      bonusDiscounts: Number(s.bonusDiscounts),
-      netSalary: Number(s.netSalary),
-      netTransport: Number(s.netTransport),
-      netBonus: Number(s.netBonus),
-      netOvertime: Number(s.netOvertime),
-      netTotal: Number(s.netTotal),
-    }))
+    slips.map((s) => serializeNominaSlipForApi(s))
   );
+});
+
+router.get("/slips/:id", async (req, res) => {
+  try {
+    const slip = await prisma.nominaSlip.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { employee: { select: { id: true, name: true, phone: true } } },
+    });
+    return res.json(serializeNominaSlipForApi(slip));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(404).json({ error: message });
+  }
 });
 
 router.post("/periods/:id/regenerate", async (req, res) => {
@@ -673,7 +697,11 @@ router.post("/periods/:id/regenerate", async (req, res) => {
 router.post("/slips/:id/send-whatsapp", async (req, res) => {
   try {
     const result = await sendSlipWhatsApp(req.params.id);
-    return res.json({ ok: true, ...result });
+    const slip = await prisma.nominaSlip.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { employee: { select: { id: true, name: true, phone: true } } },
+    });
+    return res.json({ ok: true, slip: serializeNominaSlipForApi(slip), ...result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     return res.status(400).json({ error: message });

@@ -526,11 +526,55 @@ export const upsertSlipForEmployee = async (employeeId: string, periodId: string
       breakdown: computed.breakdown as Prisma.InputJsonValue,
     },
     include: {
-      employee: true,
+      employee: { select: { id: true, name: true, phone: true } },
       period: true,
     },
   });
 };
+
+type SlipWithEmployee = {
+  id: string;
+  employeeId: string;
+  accessToken: string;
+  grossSalary: Prisma.Decimal | number;
+  grossTransport: Prisma.Decimal | number;
+  grossBonus: Prisma.Decimal | number;
+  grossOvertime: Prisma.Decimal | number;
+  salaryDiscounts: Prisma.Decimal | number;
+  bonusDiscounts: Prisma.Decimal | number;
+  netSalary: Prisma.Decimal | number;
+  netTransport: Prisma.Decimal | number;
+  netBonus: Prisma.Decimal | number;
+  netOvertime: Prisma.Decimal | number;
+  netTotal: Prisma.Decimal | number;
+  breakdown: unknown;
+  whatsappSentAt: Date | null;
+  employee: { id: string; name: string; phone: string | null };
+};
+
+export const serializeNominaSlipForApi = (slip: SlipWithEmployee) => ({
+  id: slip.id,
+  employeeId: slip.employeeId,
+  accessToken: slip.accessToken,
+  publicUrl: buildSlipPublicUrl(slip.accessToken),
+  employee: {
+    name: slip.employee.name,
+    phone: slip.employee.phone,
+  },
+  grossSalary: toMoney(slip.grossSalary),
+  grossTransport: toMoney(slip.grossTransport),
+  grossBonus: toMoney(slip.grossBonus),
+  grossOvertime: toMoney(slip.grossOvertime),
+  salaryDiscounts: toMoney(slip.salaryDiscounts),
+  bonusDiscounts: toMoney(slip.bonusDiscounts),
+  netSalary: toMoney(slip.netSalary),
+  netTransport: toMoney(slip.netTransport),
+  netBonus: toMoney(slip.netBonus),
+  netOvertime: toMoney(slip.netOvertime),
+  netTotal: toMoney(slip.netTotal),
+  breakdown: slip.breakdown,
+  whatsappSentAt: slip.whatsappSentAt,
+});
 
 export const generateSlipsForPeriod = async (year: number, month: number, half: 1 | 2) => {
   const period = await prisma.nominaPeriod.findUnique({
@@ -592,6 +636,19 @@ export const sendSlipWhatsApp = async (slipId: string) => {
   });
 
   return { sid, to, reminderText };
+};
+
+export const generateAndSendSlipForEmployee = async (
+  employeeId: string,
+  periodId: string
+) => {
+  const slip = await upsertSlipForEmployee(employeeId, periodId);
+  const whatsapp = await sendSlipWhatsApp(slip.id);
+  const refreshed = await prisma.nominaSlip.findUniqueOrThrow({
+    where: { id: slip.id },
+    include: { employee: { select: { id: true, name: true, phone: true } } },
+  });
+  return { slip: refreshed, whatsapp };
 };
 
 export const sendAllSlipsWhatsApp = async (periodId: string) => {
