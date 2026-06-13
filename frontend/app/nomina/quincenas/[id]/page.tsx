@@ -329,7 +329,7 @@ export default function NominaQuincenaWorkspacePage() {
                     )
                   }
                 >
-                  + Vales / préstamos
+                  + Vales / descuentos
                 </button>
                 <button
                   type="button"

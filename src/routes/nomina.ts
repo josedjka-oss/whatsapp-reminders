@@ -4,11 +4,13 @@ import { prisma } from "../db";
 import { requireAuth as requireAdminAuth } from "../middleware/auth";
 import {
   assertPrestamoGroupEditable,
+  assertQuincenaDescuentoEditable,
   assertValeEditable,
   buildSlipPublicUrl,
   closeQuincena,
   createNominaValeOrPrestamo,
   createOpenQuincena,
+  createQuincenaDescuento,
   generateSlipsForPeriod,
   generateAndSendSlipForEmployee,
   getOrCreateScheduleConfig,
@@ -471,6 +473,70 @@ router.delete("/vales/:id", async (req, res) => {
   try {
     await assertValeEditable(req.params.id);
     await prisma.nominaVale.delete({ where: { id: req.params.id } });
+    return res.json({ ok: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// --- Descuentos de quincena (nombre libre, foto opcional) ---
+router.get("/descuentos-quincena", async (req, res) => {
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  const half = req.query.half ? Number(req.query.half) : undefined;
+
+  const rows = await prisma.nominaQuincenaDescuento.findMany({
+    where: {
+      ...(year ? { year } : {}),
+      ...(month ? { month } : {}),
+      ...(half ? { half } : {}),
+    },
+    include: { employee: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return res.json(rows);
+});
+
+router.post("/descuentos-quincena", async (req, res) => {
+  try {
+    const { employeeId, label, amount, appliesTo, year, month, half, photoBase64, photoUrl } =
+      req.body ?? {};
+
+    if (!employeeId || !label) {
+      return res.status(400).json({ error: "employeeId y label son requeridos" });
+    }
+    if (!year || !month || !half) {
+      return res.status(400).json({ error: "year, month y half son requeridos" });
+    }
+
+    let finalPhotoUrl: string | null = photoUrl ? String(photoUrl) : null;
+    if (photoBase64) {
+      finalPhotoUrl = await uploadValePhoto(String(photoBase64));
+    }
+
+    const row = await createQuincenaDescuento({
+      employeeId: String(employeeId),
+      label: String(label),
+      amount: parseMoney(amount, "amount"),
+      appliesTo: parseAppliesTo(appliesTo),
+      year: Number(year),
+      month: Number(month),
+      half: Number(half) as 1 | 2,
+      photoUrl: finalPhotoUrl,
+    });
+
+    return res.status(201).json(row);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.delete("/descuentos-quincena/:id", async (req, res) => {
+  try {
+    await assertQuincenaDescuentoEditable(req.params.id);
+    await prisma.nominaQuincenaDescuento.delete({ where: { id: req.params.id } });
     return res.json({ ok: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";

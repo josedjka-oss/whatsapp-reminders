@@ -72,3 +72,7 @@ export const grossOvertimeForHalf = (
     monthlyHoursBase
   );
 };
+
+/** Redondeo al mil más cercano para totales de salario+transporte en recibo. */
+export const roundCopToThousand = (amount: number): number =>
+  Math.round(amount / 1000) * 1000;

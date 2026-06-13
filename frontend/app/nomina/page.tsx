@@ -30,7 +30,7 @@ export default function NominaHomePage() {
     },
     {
       title: "Vales y préstamos",
-      desc: "Vales con foto o préstamos repartidos en varias quincenas",
+      desc: "Vales con foto, descuentos con nombre libre o préstamos en cuotas",
       href: "/nomina/vales",
       emoji: "🧾",
       color: "from-amber-500 to-amber-600",

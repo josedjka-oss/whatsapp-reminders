@@ -19,6 +19,7 @@ import {
   grossTransportForHalf,
   hourlyRateFromMonthlySalary,
   normalizeBonusFrequency,
+  roundCopToThousand,
 } from "../utils/nomina-calculations";
 import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
 
@@ -363,6 +364,16 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     orderBy: { createdAt: "asc" },
   });
 
+  const quincenaDescuentos = await prisma.nominaQuincenaDescuento.findMany({
+    where: {
+      employeeId,
+      year: period.year,
+      month: period.month,
+      half: period.half,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
   const overtime = await prisma.nominaOvertime.findUnique({
     where: {
       employeeId_year_month: {
@@ -397,19 +408,103 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
   const recurringBonus = sumByTarget(employee.deductions, "BONUS");
   const valeSalary = sumByTarget(vales, "SALARY");
   const valeBonus = sumByTarget(vales, "BONUS");
+  const extraSalary = sumByTarget(quincenaDescuentos, "SALARY");
+  const extraBonus = sumByTarget(quincenaDescuentos, "BONUS");
 
-  const salaryDiscounts = recurringSalary + valeSalary;
-  const bonusDiscounts = recurringBonus + valeBonus;
+  const salaryDiscounts = recurringSalary + valeSalary + extraSalary;
+  const bonusDiscounts = recurringBonus + valeBonus + extraBonus;
 
-  const netSalary = Math.max(0, grossSalary - salaryDiscounts);
-  const netTransport = grossTransport;
+  const grossSalaryTransportRaw = grossSalary + grossTransport;
+  const grossSalaryTransportRounded = roundCopToThousand(grossSalaryTransportRaw);
+
   const netBonus = Math.max(0, grossBonus - bonusDiscounts);
   const netOvertime = grossOvertime;
   const netSalaryWithTransport = Math.max(
     0,
-    grossSalary + grossTransport - salaryDiscounts
+    grossSalaryTransportRounded - salaryDiscounts
   );
   const netTotal = netSalaryWithTransport + netBonus + netOvertime;
+
+  const mapValeLabel = (v: { kind: string; holderName: string }) =>
+    v.kind === "PRESTAMO" ? v.holderName : v.holderName;
+
+  const salaryDiscountLines = [
+    ...employee.deductions
+      .filter((d) => d.appliesTo === "SALARY")
+      .map((d) => ({
+        id: d.id,
+        label: d.label,
+        amount: toMoney(d.amount),
+        source: "fijo" as const,
+        photoUrl: null as string | null,
+      })),
+    ...vales
+      .filter((v) => v.appliesTo === "SALARY")
+      .map((v) => ({
+        id: v.id,
+        label: mapValeLabel(v),
+        amount: toMoney(v.amount),
+        source: (v.kind === "PRESTAMO" ? "prestamo" : "vale") as "vale" | "prestamo",
+        photoUrl: v.photoUrl,
+      })),
+    ...quincenaDescuentos
+      .filter((d) => d.appliesTo === "SALARY")
+      .map((d) => ({
+        id: d.id,
+        label: d.label,
+        amount: toMoney(d.amount),
+        source: "descuento" as const,
+        photoUrl: d.photoUrl,
+      })),
+  ];
+
+  const bonusDiscountLines = [
+    ...employee.deductions
+      .filter((d) => d.appliesTo === "BONUS")
+      .map((d) => ({
+        id: d.id,
+        label: d.label,
+        amount: toMoney(d.amount),
+        source: "fijo" as const,
+        photoUrl: null as string | null,
+      })),
+    ...vales
+      .filter((v) => v.appliesTo === "BONUS")
+      .map((v) => ({
+        id: v.id,
+        label: mapValeLabel(v),
+        amount: toMoney(v.amount),
+        source: (v.kind === "PRESTAMO" ? "prestamo" : "vale") as "vale" | "prestamo",
+        photoUrl: v.photoUrl,
+      })),
+    ...quincenaDescuentos
+      .filter((d) => d.appliesTo === "BONUS")
+      .map((d) => ({
+        id: d.id,
+        label: d.label,
+        amount: toMoney(d.amount),
+        source: "descuento" as const,
+        photoUrl: d.photoUrl,
+      })),
+  ];
+
+  const photoAttachments = [
+    ...vales.filter((v) => v.photoUrl).map((v) => ({
+      label: mapValeLabel(v),
+      amount: toMoney(v.amount),
+      photoUrl: v.photoUrl!,
+      kind: v.kind,
+    })),
+    ...quincenaDescuentos.filter((d) => d.photoUrl).map((d) => ({
+      label: d.label,
+      amount: toMoney(d.amount),
+      photoUrl: d.photoUrl!,
+      kind: "DESCUENTO",
+    })),
+  ];
+
+  const netSalary = Math.max(0, grossSalary - salaryDiscounts);
+  const netTransport = grossTransport;
 
   const breakdown = {
     employeeName: employee.name,
@@ -425,6 +520,8 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     monthlyBonus,
     grossSalary,
     grossTransport,
+    grossSalaryTransportRaw,
+    grossSalaryTransportRounded,
     grossBonus,
     grossOvertime,
     salaryDiscounts,
@@ -435,6 +532,22 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     netOvertime,
     netSalaryWithTransport,
     netTotal,
+    salarySection: {
+      grossSalary,
+      grossTransport,
+      grossTotal: grossSalaryTransportRounded,
+      grossTotalRaw: grossSalaryTransportRaw,
+      discountLines: salaryDiscountLines,
+      totalDiscounts: salaryDiscounts,
+      net: netSalaryWithTransport,
+    },
+    bonusSection: {
+      grossBonus,
+      discountLines: bonusDiscountLines,
+      totalDiscounts: bonusDiscounts,
+      net: netBonus,
+    },
+    photoAttachments,
     overtime: {
       daytimeHours,
       monthlyHoursBase,
@@ -467,6 +580,13 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
         ? toMoney(v.totalPrestamoAmount)
         : null,
       prestamoGroupId: v.prestamoGroupId,
+    })),
+    quincenaDescuentos: quincenaDescuentos.map((d) => ({
+      id: d.id,
+      label: d.label,
+      amount: toMoney(d.amount),
+      appliesTo: d.appliesTo,
+      photoUrl: d.photoUrl,
     })),
   };
 
@@ -813,6 +933,49 @@ export const createNominaValeOrPrestamo = async (input: CreateValeInput) => {
   }
 
   return { kind: "PRESTAMO" as const, prestamoGroupId, installments };
+};
+
+export type CreateQuincenaDescuentoInput = {
+  employeeId: string;
+  label: string;
+  amount: number;
+  appliesTo: "SALARY" | "BONUS";
+  year: number;
+  month: number;
+  half: 1 | 2;
+  photoUrl?: string | null;
+};
+
+export const createQuincenaDescuento = async (input: CreateQuincenaDescuentoInput) => {
+  await assertQuincenaOpenForEditing({
+    year: input.year,
+    month: input.month,
+    half: input.half,
+  });
+
+  return prisma.nominaQuincenaDescuento.create({
+    data: {
+      employeeId: input.employeeId,
+      label: input.label.trim(),
+      amount: input.amount,
+      appliesTo: input.appliesTo,
+      year: input.year,
+      month: input.month,
+      half: input.half,
+      photoUrl: input.photoUrl ?? null,
+    },
+    include: { employee: { select: { id: true, name: true } } },
+  });
+};
+
+export const assertQuincenaDescuentoEditable = async (id: string) => {
+  const row = await prisma.nominaQuincenaDescuento.findUniqueOrThrow({ where: { id } });
+  await assertQuincenaCanReceiveInstallment({
+    year: row.year,
+    month: row.month,
+    half: row.half as 1 | 2,
+  });
+  return row;
 };
 
 export const assertValeEditable = async (valeId: string) => {

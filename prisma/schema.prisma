@@ -86,6 +86,7 @@ model NominaEmployee {
 
   deductions NominaDeduction[]
   vales      NominaVale[]
+  quincenaDescuentos NominaQuincenaDescuento[]
   slips      NominaSlip[]
   overtimes  NominaOvertime[]
 
@@ -145,6 +146,23 @@ model NominaVale {
 
   @@index([employeeId, year, month, half])
   @@index([prestamoGroupId])
+}
+
+model NominaQuincenaDescuento {
+  id         String   @id @default(uuid())
+  employeeId String
+  label      String
+  amount     Decimal  @db.Decimal(12, 2)
+  appliesTo  String   // SALARY | BONUS
+  photoUrl   String?
+  year       Int
+  month      Int
+  half       Int
+  createdAt  DateTime @default(now())
+
+  employee NominaEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, year, month, half])
 }
 
 model NominaPeriod {
