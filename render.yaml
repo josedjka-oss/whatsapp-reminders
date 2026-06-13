@@ -33,6 +33,8 @@ services:
           property: host
       - key: TWILIO_WEBHOOK_PATH
         value: /webhooks/twilio/whatsapp
+      - key: NOMINA_PUBLIC_BASE_URL
+        value: https://whatsapp-reminders.vercel.app
 
 databases:
   - name: whatsapp-reminders-db

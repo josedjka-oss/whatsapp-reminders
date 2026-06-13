@@ -37,12 +37,22 @@ const formatCop = (amount: number): string =>
   }).format(amount);
 
 export const getNominaPublicBaseUrl = (): string => {
-  const base =
+  const explicit =
     process.env.NOMINA_PUBLIC_BASE_URL?.trim() ||
-    process.env.FRONTEND_URL?.trim() ||
-    process.env.PUBLIC_BASE_URL?.trim() ||
-    "http://localhost:3000";
-  return base.replace(/\/$/, "");
+    process.env.FRONTEND_URL?.trim();
+  if (explicit) {
+    return explicit.replace(/\/$/, "");
+  }
+
+  // Los recibos /nomina/recibo/* viven en el frontend (Vercel), no en el API de Render.
+  if (process.env.NODE_ENV === "production") {
+    return "https://whatsapp-reminders.vercel.app";
+  }
+
+  return (process.env.PUBLIC_BASE_URL?.trim() || "http://localhost:3000").replace(
+    /\/$/,
+    ""
+  );
 };
 
 export const buildSlipPublicUrl = (accessToken: string): string =>
