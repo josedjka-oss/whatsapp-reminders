@@ -18,6 +18,7 @@ type Employee = {
   transportAllowance: string | number;
   baseBonus: string | number;
   bonusFrequency: string;
+  monthlyHoursBase: number;
   isActive: boolean;
   deductions: Deduction[];
 };
@@ -39,6 +40,7 @@ export default function NominaEmpleadosPage() {
     transportAllowance: "",
     baseBonus: "",
     bonusFrequency: "QUINCENAL",
+    monthlyHoursBase: "240",
   });
   const [deductionForm, setDeductionForm] = useState<
     Record<string, { label: string; amount: string; appliesTo: string }>
@@ -74,6 +76,7 @@ export default function NominaEmpleadosPage() {
         transportAllowance: Number(form.transportAllowance) || 0,
         baseBonus: Number(form.baseBonus) || 0,
         bonusFrequency: form.bonusFrequency,
+        monthlyHoursBase: Number(form.monthlyHoursBase) || 240,
       }),
     });
     if (!res.ok) {
@@ -88,6 +91,7 @@ export default function NominaEmpleadosPage() {
       transportAllowance: "",
       baseBonus: "",
       bonusFrequency: "QUINCENAL",
+      monthlyHoursBase: "240",
     });
     void load();
   };
@@ -112,6 +116,23 @@ export default function NominaEmpleadosPage() {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       alert(data.error || "Error");
+      return;
+    }
+    void load();
+  };
+
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (
+      !confirm(
+        `¿Eliminar a ${emp.name} de nómina? Se borran sus vales, descuentos y recibos asociados.`
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/nomina/employees/${emp.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "No se pudo eliminar");
       return;
     }
     void load();
@@ -218,6 +239,34 @@ export default function NominaEmpleadosPage() {
               <option value="QUINCENAL">Bonificación quincenal (15 y fin de mes)</option>
               <option value="MENSUAL">Bonificación mensual (solo fin de mes)</option>
             </select>
+            <label className="text-sm md:col-span-2">
+              Base horas/mes (cálculo horas extra)
+              <div className="flex flex-wrap gap-2 mt-1">
+                {[240, 220, 200].map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setForm({ ...form, monthlyHoursBase: String(h) })}
+                    className={`px-3 py-1 rounded border text-sm ${
+                      form.monthlyHoursBase === String(h)
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-gray-700"
+                    }`}
+                  >
+                    {h} h
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  min={1}
+                  className="border rounded px-2 py-1 w-24 text-sm"
+                  placeholder="Otro"
+                  value={form.monthlyHoursBase}
+                  onChange={(e) => setForm({ ...form, monthlyHoursBase: e.target.value })}
+                  aria-label="Base horas mensuales personalizada"
+                />
+              </div>
+            </label>
           </div>
           <button
             type="button"
@@ -237,21 +286,41 @@ export default function NominaEmpleadosPage() {
           return (
             <div key={emp.id} className="bg-white rounded-lg shadow p-6 space-y-4">
               <div className="flex flex-wrap justify-between gap-2 items-start">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">{emp.name}</h3>
-                  <p className="text-sm text-gray-500">{emp.phone || "Sin teléfono"}</p>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs text-gray-500">Nombre</label>
+                  <input
+                    className="mt-1 w-full border rounded-lg px-3 py-2 font-bold text-gray-900"
+                    defaultValue={emp.name}
+                    onBlur={(e) => {
+                      const next = e.target.value.trim();
+                      if (next && next.toUpperCase() !== emp.name) {
+                        void handleUpdateEmployee(emp, { name: next });
+                      }
+                    }}
+                    aria-label={`Nombre ${emp.name}`}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">{emp.phone || "Sin teléfono"}</p>
                   <p className="text-xs text-indigo-700 mt-1">{bonusLabel(emp.bonusFrequency)}</p>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={emp.isActive}
-                    onChange={(e) =>
-                      void handleUpdateEmployee(emp, { isActive: e.target.checked })
-                    }
-                  />
-                  Activo
-                </label>
+                <div className="flex flex-col items-end gap-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={emp.isActive}
+                      onChange={(e) =>
+                        void handleUpdateEmployee(emp, { isActive: e.target.checked })
+                      }
+                    />
+                    Activo
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteEmployee(emp)}
+                    className="text-sm text-red-600 hover:text-red-800 underline"
+                  >
+                    Eliminar empleado
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -310,6 +379,39 @@ export default function NominaEmpleadosPage() {
                     defaultValue={emp.phone ?? ""}
                     onBlur={(e) => void handleUpdateEmployee(emp, { phone: e.target.value })}
                   />
+                </label>
+                <label className="text-sm md:col-span-2">
+                  Base horas/mes (horas extra: salario ÷ base × 1.25)
+                  <div className="flex flex-wrap gap-2 mt-1 items-center">
+                    {[240, 220, 200].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() =>
+                          void handleUpdateEmployee(emp, { monthlyHoursBase: h })
+                        }
+                        className={`px-3 py-1 rounded border text-sm ${
+                          (emp.monthlyHoursBase ?? 240) === h
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-white text-gray-700"
+                        }`}
+                      >
+                        {h} h
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min={1}
+                      className="border rounded px-2 py-1 w-24"
+                      defaultValue={emp.monthlyHoursBase ?? 240}
+                      onBlur={(e) =>
+                        void handleUpdateEmployee(emp, {
+                          monthlyHoursBase: Number(e.target.value) || 240,
+                        })
+                      }
+                      aria-label="Base horas mensuales"
+                    />
+                  </div>
                 </label>
               </div>
 

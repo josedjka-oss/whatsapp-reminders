@@ -7,6 +7,7 @@ type Employee = {
   id: string;
   name: string;
   baseSalary: string | number;
+  monthlyHoursBase?: number;
 };
 
 type OvertimeRow = {
@@ -23,6 +24,7 @@ type CalcPreview = {
   hourlyRate: number;
   overtimeUnitRate: number;
   totalOvertimePay: number;
+  monthlyHoursBase: number;
 };
 
 const formatCop = (n: number) =>
@@ -38,6 +40,7 @@ export default function NominaHorasExtrasPage() {
   const [calcPreview, setCalcPreview] = useState<CalcPreview | null>(null);
   const [calcSalary, setCalcSalary] = useState("");
   const [calcHours, setCalcHours] = useState("");
+  const [calcHoursBase, setCalcHoursBase] = useState("240");
 
   const load = useCallback(async () => {
     const [empRes, otRes] = await Promise.all([
@@ -73,7 +76,7 @@ export default function NominaHorasExtrasPage() {
     const hours = Number(calcHours);
     if (!salary) return;
     const res = await fetch(
-      `/api/nomina/calculate-overtime?salary=${salary}&hours=${hours}`
+      `/api/nomina/calculate-overtime?salary=${salary}&hours=${hours}&hoursBase=${calcHoursBase}`
     );
     if (res.ok) setCalcPreview(await res.json());
   };
@@ -84,20 +87,29 @@ export default function NominaHorasExtrasPage() {
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 text-sm text-indigo-900">
           <p className="font-semibold mb-1">Fórmula (hora extra diurna Colombia)</p>
-          <p>Hora ordinaria = salario mensual ÷ 240</p>
+          <p>Hora ordinaria = salario mensual ÷ base horas (240, 220, 200…)</p>
           <p>Hora extra diurna = hora ordinaria × 1.25</p>
           <p className="mt-2">Las horas extras del mes se pagan en la <strong>2da quincena</strong> (fin de mes).</p>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6 space-y-3">
           <h2 className="font-semibold">Calculadora rápida</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <input
               type="number"
               className="border rounded-lg px-3 py-2"
               placeholder="Salario mensual"
               value={calcSalary}
               onChange={(e) => setCalcSalary(e.target.value)}
+            />
+            <input
+              type="number"
+              min={1}
+              className="border rounded-lg px-3 py-2"
+              placeholder="Base horas/mes"
+              value={calcHoursBase}
+              onChange={(e) => setCalcHoursBase(e.target.value)}
+              aria-label="Base horas mensuales"
             />
             <input
               type="number"
@@ -117,6 +129,7 @@ export default function NominaHorasExtrasPage() {
           </div>
           {calcPreview && (
             <div className="text-sm bg-gray-50 rounded p-3 space-y-1">
+              <p>Base: {calcPreview.monthlyHoursBase} horas/mes</p>
               <p>Hora ordinaria: {formatCop(calcPreview.hourlyRate)}</p>
               <p>Hora extra diurna: {formatCop(calcPreview.overtimeUnitRate)}</p>
               <p className="font-bold text-lg">Total horas extras: {formatCop(calcPreview.totalOvertimePay)}</p>
@@ -150,13 +163,15 @@ export default function NominaHorasExtrasPage() {
         <div className="bg-white rounded-lg shadow divide-y">
           {employees.map((emp) => {
             const existing = rows.find((r) => r.employeeId === emp.id);
-            const hourly = Number(emp.baseSalary) / 240;
+            const base = emp.monthlyHoursBase ?? 240;
+            const hourly = Number(emp.baseSalary) / base;
             return (
               <div key={emp.id} className="p-4 flex flex-col md:flex-row md:items-center gap-4">
                 <div className="flex-1">
                   <p className="font-semibold">{emp.name}</p>
                   <p className="text-xs text-gray-500">
-                    Salario {formatCop(Number(emp.baseSalary))} · Hora {formatCop(hourly)}
+                    Salario {formatCop(Number(emp.baseSalary))} · Base {base} h · Hora{" "}
+                    {formatCop(hourly)}
                   </p>
                 </div>
                 <input

@@ -122,14 +122,20 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
   const monthlyTransport = toMoney(employee.transportAllowance);
   const monthlyBonus = toMoney(employee.baseBonus);
   const bonusFrequency = normalizeBonusFrequency(employee.bonusFrequency);
+  const monthlyHoursBase = employee.monthlyHoursBase ?? 240;
   const half = period.half as 1 | 2;
   const daytimeHours = overtime ? toMoney(overtime.daytimeHours) : 0;
 
   const grossSalary = grossSalaryForHalf(monthlySalary);
   const grossTransport = grossTransportForHalf(monthlyTransport);
   const grossBonus = grossBonusForHalf(monthlyBonus, half, bonusFrequency);
-  const grossOvertime = grossOvertimeForHalf(monthlySalary, daytimeHours, half);
-  const hourlyRate = hourlyRateFromMonthlySalary(monthlySalary);
+  const grossOvertime = grossOvertimeForHalf(
+    monthlySalary,
+    daytimeHours,
+    half,
+    monthlyHoursBase
+  );
+  const hourlyRate = hourlyRateFromMonthlySalary(monthlySalary, monthlyHoursBase);
   const overtimeUnitRate = hourlyRate * 1.25;
 
   const recurringSalary = sumByTarget(employee.deductions, "SALARY");
@@ -154,6 +160,7 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     half: period.half,
     payDay: period.payDay,
     bonusFrequency,
+    monthlyHoursBase,
     monthlySalary,
     monthlyTransport,
     monthlyBonus,
@@ -170,9 +177,14 @@ export const computeSlipBreakdown = async (employeeId: string, periodId: string)
     netTotal,
     overtime: {
       daytimeHours,
+      monthlyHoursBase,
       hourlyRate,
       overtimeUnitRate,
-      totalMonthOvertimePay: calculateDaytimeOvertimePay(monthlySalary, daytimeHours),
+      totalMonthOvertimePay: calculateDaytimeOvertimePay(
+        monthlySalary,
+        daytimeHours,
+        monthlyHoursBase
+      ),
       paidInHalf: half,
     },
     recurringDeductions: employee.deductions.map((d) => ({

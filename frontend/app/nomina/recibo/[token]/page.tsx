@@ -30,6 +30,7 @@ type Recibo = {
     vales?: ValeLine[];
     overtime?: {
       daytimeHours: number;
+      monthlyHoursBase?: number;
       hourlyRate: number;
       overtimeUnitRate: number;
       totalMonthOvertimePay: number;
@@ -103,8 +104,8 @@ export default function ReciboPublicoPage() {
                 />
                 {ot && (
                   <p className="text-xs text-gray-500 pl-1">
-                    {formatCop(ot.overtimeUnitRate)} / hora extra · total mes{" "}
-                    {formatCop(ot.totalMonthOvertimePay)}
+                    Base {ot.monthlyHoursBase ?? 240} h/mes · {formatCop(ot.overtimeUnitRate)} / hora
+                    extra · total mes {formatCop(ot.totalMonthOvertimePay)}
                   </p>
                 )}
               </>

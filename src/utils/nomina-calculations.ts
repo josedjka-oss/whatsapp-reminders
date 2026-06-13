@@ -1,9 +1,9 @@
 /**
  * Cálculos de nómina Colombia (referencia laboral habitual).
- * Hora ordinaria mensual = salario / 240
+ * Hora ordinaria mensual = salario / baseHorasMensuales
  * Hora extra diurna = hora ordinaria × 1.25 (recargo 25%)
  */
-export const MONTHLY_HOURS_DIVISOR = 240;
+export const DEFAULT_MONTHLY_HOURS_BASE = 240;
 export const DAYTIME_OVERTIME_MULTIPLIER = 1.25;
 
 export type BonusFrequency = "QUINCENAL" | "MENSUAL";
@@ -13,15 +13,24 @@ export const normalizeBonusFrequency = (raw: unknown): BonusFrequency => {
   return s === "MENSUAL" ? "MENSUAL" : "QUINCENAL";
 };
 
-export const hourlyRateFromMonthlySalary = (monthlySalary: number): number =>
-  monthlySalary / MONTHLY_HOURS_DIVISOR;
+export const normalizeMonthlyHoursBase = (raw: unknown): number => {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_MONTHLY_HOURS_BASE;
+  return Math.round(n);
+};
+
+export const hourlyRateFromMonthlySalary = (
+  monthlySalary: number,
+  monthlyHoursBase = DEFAULT_MONTHLY_HOURS_BASE
+): number => monthlySalary / monthlyHoursBase;
 
 export const calculateDaytimeOvertimePay = (
   monthlySalary: number,
-  daytimeHours: number
+  daytimeHours: number,
+  monthlyHoursBase = DEFAULT_MONTHLY_HOURS_BASE
 ): number => {
   if (daytimeHours <= 0 || monthlySalary <= 0) return 0;
-  const hourly = hourlyRateFromMonthlySalary(monthlySalary);
+  const hourly = hourlyRateFromMonthlySalary(monthlySalary, monthlyHoursBase);
   return Math.round(daytimeHours * hourly * DAYTIME_OVERTIME_MULTIPLIER);
 };
 
@@ -53,8 +62,13 @@ export const grossBonusForHalf = (
 export const grossOvertimeForHalf = (
   monthlySalary: number,
   daytimeHours: number,
-  half: 1 | 2
+  half: 1 | 2,
+  monthlyHoursBase = DEFAULT_MONTHLY_HOURS_BASE
 ): number => {
   if (half !== 2) return 0;
-  return calculateDaytimeOvertimePay(monthlySalary, daytimeHours);
+  return calculateDaytimeOvertimePay(
+    monthlySalary,
+    daytimeHours,
+    monthlyHoursBase
+  );
 };

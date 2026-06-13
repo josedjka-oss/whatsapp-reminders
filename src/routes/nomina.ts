@@ -18,6 +18,7 @@ import {
   calculateDaytimeOvertimePay,
   hourlyRateFromMonthlySalary,
   normalizeBonusFrequency,
+  normalizeMonthlyHoursBase,
 } from "../utils/nomina-calculations";
 
 const router = Router();
@@ -25,6 +26,17 @@ const router = Router();
 const parseAppliesTo = (raw: unknown): "SALARY" | "BONUS" => {
   const s = String(raw ?? "SALARY").toUpperCase();
   return s === "BONUS" ? "BONUS" : "SALARY";
+};
+
+const parseHoursBase = (raw: unknown, field: string): number => {
+  if (raw === undefined || raw === null || raw === "") {
+    return normalizeMonthlyHoursBase(undefined);
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    throw new Error(`${field} debe ser un entero > 0 (ej. 240, 220, 200)`);
+  }
+  return n;
 };
 
 const parseMoney = (raw: unknown, field: string): number => {
@@ -71,15 +83,22 @@ router.get("/calculate-overtime", async (req, res) => {
   try {
     const salary = parseMoney(req.query.salary, "salary");
     const hours = parseMoney(req.query.hours ?? 0, "hours");
-    const hourlyRate = hourlyRateFromMonthlySalary(salary);
-    const total = calculateDaytimeOvertimePay(salary, hours);
+    const hoursBase =
+      req.query.hoursBase !== undefined
+        ? parseHoursBase(req.query.hoursBase, "hoursBase")
+        : req.query.monthlyHoursBase !== undefined
+          ? parseHoursBase(req.query.monthlyHoursBase, "monthlyHoursBase")
+          : 240;
+    const hourlyRate = hourlyRateFromMonthlySalary(salary, hoursBase);
+    const total = calculateDaytimeOvertimePay(salary, hours, hoursBase);
     return res.json({
       monthlySalary: salary,
       daytimeHours: hours,
+      monthlyHoursBase: hoursBase,
       hourlyRate,
       overtimeUnitRate: hourlyRate * 1.25,
       totalOvertimePay: total,
-      formula: "salario/240 × 1.25 × horas",
+      formula: `salario/${hoursBase} × 1.25 × horas`,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
@@ -130,6 +149,7 @@ router.post("/employees", async (req, res) => {
       transportAllowance,
       baseBonus,
       bonusFrequency,
+      monthlyHoursBase,
       isActive,
     } = req.body ?? {};
     if (!name || typeof name !== "string") {
@@ -145,6 +165,10 @@ router.post("/employees", async (req, res) => {
         transportAllowance: parseMoney(transportAllowance ?? 0, "transportAllowance"),
         baseBonus: parseMoney(baseBonus ?? 0, "baseBonus"),
         bonusFrequency: normalizeBonusFrequency(bonusFrequency),
+        monthlyHoursBase:
+          monthlyHoursBase !== undefined
+            ? parseHoursBase(monthlyHoursBase, "monthlyHoursBase")
+            : 240,
         isActive: isActive !== false,
       },
     });
@@ -164,6 +188,7 @@ router.patch("/employees/:id", async (req, res) => {
       transportAllowance,
       baseBonus,
       bonusFrequency,
+      monthlyHoursBase,
       isActive,
     } = req.body ?? {};
     const data: Prisma.NominaEmployeeUpdateInput = {};
@@ -179,6 +204,9 @@ router.patch("/employees/:id", async (req, res) => {
     if (baseBonus !== undefined) data.baseBonus = parseMoney(baseBonus, "baseBonus");
     if (bonusFrequency !== undefined) {
       data.bonusFrequency = normalizeBonusFrequency(bonusFrequency);
+    }
+    if (monthlyHoursBase !== undefined) {
+      data.monthlyHoursBase = parseHoursBase(monthlyHoursBase, "monthlyHoursBase");
     }
     if (isActive !== undefined) data.isActive = Boolean(isActive);
 
@@ -214,6 +242,7 @@ router.get("/overtime", async (req, res) => {
           id: true,
           name: true,
           baseSalary: true,
+          monthlyHoursBase: true,
           bonusFrequency: true,
         },
       },
@@ -227,7 +256,8 @@ router.get("/overtime", async (req, res) => {
       daytimeHours: Number(r.daytimeHours),
       calculatedPay: calculateDaytimeOvertimePay(
         Number(r.employee.baseSalary),
-        Number(r.daytimeHours)
+        Number(r.daytimeHours),
+        r.employee.monthlyHoursBase ?? 240
       ),
     }))
   );
@@ -265,7 +295,8 @@ router.put("/overtime", async (req, res) => {
 
     const calculatedPay = calculateDaytimeOvertimePay(
       Number(employee.baseSalary),
-      hours
+      hours,
+      employee.monthlyHoursBase ?? 240
     );
 
     return res.json({
