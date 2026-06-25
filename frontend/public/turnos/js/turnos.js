@@ -1348,4 +1348,12 @@
     window.ccTurnosRequireAuth().then(run).catch(() => { /* redirige a consulta */ });
   }
 
+  /** Consola: TURNOS_DEBUG.validate() o TURNOS_DEBUG.validate('2026-06') */
+  window.TURNOS_DEBUG = {
+    getState: () => state,
+    getMonthKey: () => getActiveMonthKey(),
+    validate: (monthKey) =>
+      window.ENGINE_VALIDATOR?.printValidation(state, monthKey || getActiveMonthKey()),
+  };
+
 })();

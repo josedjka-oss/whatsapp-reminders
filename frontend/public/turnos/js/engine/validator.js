@@ -1,7 +1,8 @@
 /**
  * validator.js — Valida el estado generado (solo lectura).
  *
- * Uso: ENGINE_VALIDATOR.printValidation(state, '2026-06');
+ * Uso: TURNOS_DEBUG.validate('2026-06');
+ *      (state no es global; usar TURNOS_DEBUG.getState() si hace falta)
  */
 (function () {
   'use strict';
