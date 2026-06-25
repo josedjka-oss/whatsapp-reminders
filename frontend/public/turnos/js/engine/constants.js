@@ -159,6 +159,9 @@
     'david_sanchez':     '1:00',
   };
 
+  /** Almuerzo fijo lun–vie; sábado usa rotación por equipo (salvo Jhon Lozano 3:00). */
+  const almuerzoFijoSemana = (empId) => ALMUERZO_FIJO[empId] ?? null;
+
   const RESTRICCIONES_AJUSTE = {
     'harold_paipa':      { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'diego_lozano':      { puedeEntrarDiez: true,  puedeSalirCinco: true  },
@@ -179,7 +182,8 @@
   };
 
   const ALMUERZOS_MENSAJEROS      = ['12:00', '1:00', '2:00'];
-  const ALMUERZOS_SABADO          = ['12:00-12:30', '12:30-1:00', '1:00-1:30'];
+  /** Inicios sábado (30 min); la franja más temprana es 12:30. */
+  const ALMUERZOS_SABADO          = ['12:30', '1:00', '1:30'];
   const ALMUERZOS_TRES_FRANJAS    = ['12:00', '1:00', '2:00'];
 
   const formatEmpNameHtml = (fullName) => {
@@ -219,6 +223,7 @@
     GRUPOS_TURNO,
     IDS_TURNO,
     ALMUERZO_FIJO,
+    almuerzoFijoSemana,
     RESTRICCIONES_AJUSTE,
     ALMUERZOS_MENSAJEROS,
     ALMUERZOS_SABADO,

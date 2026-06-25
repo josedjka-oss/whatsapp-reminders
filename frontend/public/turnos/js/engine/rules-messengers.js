@@ -259,7 +259,7 @@
 
     if (ids.length === 2) return getLunchTrioDos(state, ids, d, monthKey);
 
-    // Sábado: rotación 12:00-12:30 · 12:30-1:00 · 1:00-1:30
+    // Sábado: rotación 12:30 · 1:00 · 1:30 (30 min c/u)
     if (d.esSabado) {
       const perm = PERMS3[hashDia(monthKey, d, 'trio-sab3') % 6];
       const out  = {};
