@@ -3,7 +3,7 @@
  * Pipeline de ajuste de horas semanales para todos los grupos.
  *
  * capWeeklyTo44       — baja no-fijos si >44h
- * capFijosTo44        — baja fijos si >44h (semana con festivo)
+ * capFijosTo44        — (obsoleto) fijos no tienen techo 44h
  * capJhonnyTo44       — baja Jhonny si >44h tras lift
  * squeezeGrupoB       — ajuste coordinado en dúos de turno
  * liftWeeklyTo44      — sube no-fijos (excepto Jhonny) si <44h
@@ -23,10 +23,14 @@
   const {
     buildWeekChunks,
     esDiaTodosNueveSeis,
+    esChunkCompleto,
   } = window.ENGINE_CALENDAR;
 
   const {
     sumWeekHours,
+    sumInMonthWeekHours,
+    targetInMonthWeekHours,
+    getCellForDayMeta,
     techoSemanal,
     normAm,
     normPm,
@@ -54,6 +58,15 @@
   const esDuoConRestricciones = (id) =>
     DUOS_RESTRICCION.some(duo => duo.includes(id));
 
+  const dayOkMin = (minDay) => (d) =>
+    minDay == null || (d.inMonth && d.day != null && d.day >= minDay);
+
+  /** Solo días editables del mes visible. */
+  const esMutable = (d, dayOk) =>
+    dayOk(d) && d.inMonth && d.day != null && !d.noLaborable;
+
+  const cellFor = (state, id, d) => getCellForDayMeta(id, d, state);
+
   // ─── CAP WEEKLY (NO-FIJOS) ────────────────────────────────────────────────────
 
   /**
@@ -63,7 +76,7 @@
    */
   const capWeeklyTo44 = (state, meta, minDay) => {
     const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
+    const dayOk  = dayOkMin(minDay);
 
     for (let round = 0; round < 20; round++) {
       let progressed = false;
@@ -86,34 +99,8 @@
     forceWithinCeiling(state, meta, minDay);
   };
 
-  /**
-   * Cap post-enforce para fijos (semana con festivo → puede haber subido >44h).
-   * Baja último día lun-vie con 9/6 → 9/5 hasta no superar 44h.
-   */
-  const capFijosTo44 = (state, meta, minDay) => {
-    const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
-    GRUPO_FIJO.forEach((id) => {
-      chunks.forEach((chunk) => {
-        let guard = 0;
-        while (sumWeekHours(id, chunk, state) > CFG.HORAS_TOPE_SEMANA && guard < 10) {
-          guard++;
-          const cands = chunk
-            .filter(d => dayOk(d) && !d.noLaborable && d.dow >= 1 && d.dow <= 5)
-            .sort((a, b) => b.dow - a.dow);
-          let lowered = false;
-          for (const d of cands) {
-            if (esNueveSeis(state.cells[id]?.[d.day])) {
-              putCell(state, id, d.day, '9', '5');
-              lowered = true;
-              break;
-            }
-          }
-          if (!lowered) break;
-        }
-      });
-    });
-  };
+  /** Fijos: horario fijo 9/6 lun-vie (~47h). No aplicar techo 44h. */
+  const capFijosTo44 = () => {};
 
   /**
    * Cap post-lift para Jhonny.
@@ -122,7 +109,7 @@
   const capJhonnyTo44 = (state, meta, minDay) => {
     const id     = 'jhonny_rodriguez';
     const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
+    const dayOk  = dayOkMin(minDay);
     const { lunesFestivoEnSemana } = window.ENGINE_RULES_JOHNNY;
 
     chunks.forEach((chunk) => {
@@ -132,14 +119,14 @@
         let bajado = false;
 
         for (const dow of [2, 1]) {
-          const dm = chunk.find(d => dayOk(d) && d.dow === dow && !d.noLaborable);
+          const dm = chunk.find(d => esMutable(d, dayOk) && d.dow === dow);
           if (dm && esNueveSeis(state.cells[id]?.[dm.day])) {
             putCell(state, id, dm.day, '9', '5'); bajado = true; break;
           }
         }
         if (bajado) continue;
 
-        const dw = chunk.find(d => dayOk(d) && d.dow === 3 && !d.noLaborable);
+        const dw = chunk.find(d => esMutable(d, dayOk) && d.dow === 3);
         if (dw && !lunesFestivoEnSemana(meta, dw) &&
             esNueveSeis(state.cells[id]?.[dw.day])) {
           putCell(state, id, dw.day, '9', '5'); bajado = true;
@@ -159,7 +146,7 @@
    */
   const squeezeGrupoB = (state, meta, minDay) => {
     const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
+    const dayOk  = dayOkMin(minDay);
 
     for (const duo of DUOS_RESTRICCION) {
       const [a, b] = duo;
@@ -192,19 +179,20 @@
    */
   const liftWeeklyTo44 = (state, meta, minDay, lockedCell) => {
     const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
+    const dayOk  = dayOkMin(minDay);
 
     for (let round = 0; round < 40; round++) {
       let progressed = false;
       EMPLEADOS.forEach(({ id }) => {
         if (IDS_FIJO.has(id) || id === 'jhonny_rodriguez') return;
         chunks.forEach((chunk) => {
+          if (!esChunkCompleto(chunk)) return;
           if (sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
           const d = chunk.find(d => {
-            if (!dayOk(d)) return false;
+            if (!esMutable(d, dayOk)) return false;
             if (lockedCell && lockedCell.id === id && lockedCell.day === d.day) return false;
-            if (d.noLaborable || d.dow < 1 || d.dow > 5) return false;
-            return esNueveCinco(state.cells[id]?.[d.day]);
+            if (d.dow < 1 || d.dow > 5) return false;
+            return esNueveCinco(cellFor(state, id, d));
           });
           if (!d) return;
           putCell(state, id, d.day, '9', '6');
@@ -221,7 +209,7 @@
   const liftJhonny = (state, meta, monthKey, minDay) => {
     const id     = 'jhonny_rodriguez';
     const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
+    const dayOk  = dayOkMin(minDay);
     const { lunesFestivoEnSemana } = window.ENGINE_RULES_JOHNNY;
 
     const trySubir = (d) => {
@@ -238,11 +226,11 @@
       if (sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
 
       for (const dow of [1, 2]) {
-        const d = chunk.find(x => dayOk(x) && x.dow === dow && !x.noLaborable);
+        const d = chunk.find(x => esMutable(x, dayOk) && x.dow === dow);
         if (d && trySubir(d) && sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
       }
 
-      const dw = chunk.find(d => dayOk(d) && d.dow === 3 && !d.noLaborable);
+      const dw = chunk.find(d => esMutable(d, dayOk) && d.dow === 3);
       if (dw && lunesFestivoEnSemana(meta, dw)) {
         trySubir(dw);
       }
@@ -253,38 +241,53 @@
 
   /**
    * Garantiza que nadie supere su techo usando mutaciones de último recurso.
-   * Excluye fijos (los maneja capFijosTo44) y Jhonny (lo maneja capJhonnyTo44).
+   * Excluye fijos (horario fijo, sin techo 44h) y Jhonny (lo maneja capJhonnyTo44).
    */
   const forceWithinCeiling = (state, meta, minDay) => {
     const chunks = buildWeekChunks(meta);
-    const dayOk  = (d) => minDay == null || d.day >= minDay;
+    const dayOk  = dayOkMin(minDay);
 
     for (let mega = 0; mega < 40; mega++) {
       let progressed = false;
 
       EMPLEADOS.forEach(({ id }) => {
-        if (IDS_FIJO.has(id) || id === 'jhonny_rodriguez') return;
+        if (IDS_FIJO.has(id) || id === 'jhonny_rodriguez' || id === 'cristian_uribe') return;
         chunks.forEach((chunk, ci) => {
           const ceil = techoSemanal(id, chunks, ci, state);
+          if (!esChunkCompleto(chunk)) return;
           if (sumWeekHours(id, chunk, state) <= ceil) return;
 
           const before = sumWeekHours(id, chunk, state);
           const cands  = chunk
-            .filter(d => dayOk(d) && !d.noLaborable && d.dow >= 1 && d.dow <= 5
+            .filter(d => esMutable(d, dayOk) && d.dow >= 1 && d.dow <= 5
                          && !esDiaTodosNueveSeis(d, meta.days))
             .sort((a, b) => b.dow - a.dow);
 
+          const tryLower = (d, fn) => {
+            if (sumWeekHours(id, chunk, state) <= ceil) return false;
+            if (fn()) { progressed = true; return true; }
+            return false;
+          };
+
+          // 1.ª pasada: 9/6→9/5 (no empuja horas al compañero)
           for (const d of cands) {
-            if (sumWeekHours(id, chunk, state) <= ceil) break;
-            if (tryBrutal9to10(state, meta, id, d))             { progressed = true; break; }
-            if (tryBrutal96to95partnerTen(state, meta, id, d))  { progressed = true; break; }
-            if (tryBrutal96to95partnerNine(state, meta, id, d)) { progressed = true; break; }
+            if (tryLower(d, () => tryBrutal96to95Messenger(state, meta, id, d))) break;
+          }
+
+          // 2.ª pasada: intercambio trío, dúos y 9→10
+          if (sumWeekHours(id, chunk, state) > ceil) {
+            for (const d of cands) {
+              if (tryLower(d, () => tryMessengerSwapTenWithPartner(state, meta, id, d))) break;
+              if (tryLower(d, () => tryBrutal96to95partnerTen(state, meta, id, d))) break;
+              if (tryLower(d, () => tryBrutal96to95partnerNine(state, meta, id, d))) break;
+              if (tryLower(d, () => tryBrutal9to10(state, meta, id, d))) break;
+            }
           }
 
           // Sábado como último recurso
           if (sumWeekHours(id, chunk, state) > ceil) {
-            const sat = chunk.find(d => d.dow === 6 && !d.noLaborable && dayOk(d));
-            if (sat && esNueveSeis(state.cells[id]?.[sat.day])) {
+            const sat = chunk.find(d => d.dow === 6 && esMutable(d, dayOk));
+            if (sat && esNueveSeis(cellFor(state, id, sat))) {
               putCell(state, id, sat.day, CFG.AM_SABADO, '5');
               if (IDS_MENSAJEROS.has(id)) enforceTrioOneTenOneFive(state, meta, sat.day);
               progressed = true;
@@ -303,14 +306,16 @@
 
   const tryBajarUnaHora = (state, meta, id, chunk, dayOk) => {
     const cands = chunk
-      .filter(d => dayOk(d) && !d.noLaborable && d.dow >= 1 && d.dow <= 5
+      .filter(d => esMutable(d, dayOk) && d.dow >= 1 && d.dow <= 5
                    && !esDiaTodosNueveSeis(d, meta.days)
-                   && esNueveSeis(state.cells[id]?.[d.day]))
+                   && esNueveSeis(cellFor(state, id, d)))
       .sort((a, b) => b.dow - a.dow);
 
     for (const d of cands) {
-      if (tryBrutal9to10(state, meta, id, d))            return true;
-      if (tryBrutal96to95partnerTen(state, meta, id, d)) return true;
+      if (tryBrutal96to95Messenger(state, meta, id, d))   return true;
+      if (tryBrutal96to95partnerTen(state, meta, id, d))  return true;
+      if (tryBrutal96to95partnerNine(state, meta, id, d)) return true;
+      if (tryBrutal9to10(state, meta, id, d))             return true;
     }
     return false;
   };
@@ -320,31 +325,63 @@
 
     const pr = partnerDuo(id);
     const cands = chunk
-      .filter(d => dayOk(d) && !d.noLaborable && d.dow >= 2 && d.dow <= 5
+      .filter(d => esMutable(d, dayOk) && d.dow >= 2 && d.dow <= 5
                    && !esDiaTodosNueveSeis(d, meta.days)
-                   && esNueveSeis(state.cells[id]?.[d.day]))
+                   && esNueveSeis(cellFor(state, id, d)))
       .sort((a, b) => b.dow - a.dow);
 
     for (const d of cands) {
-      if (tryBrutal9to10(state, meta, id, d))             return true;
+      if (tryBrutal96to95Messenger(state, meta, id, d))         return true;
+      if (tryBrutal9to10(state, meta, id, d))                   return true;
       if (pr && tryBrutal96to95partnerTen(state, meta, id, d))  return true;
       if (pr && tryBrutal96to95partnerNine(state, meta, id, d)) return true;
     }
     return false;
   };
 
+  /** Trío: intercambia am=10 entre quien tiene 9/6 y compañero con 10/6 (±1h c/u). */
+  const tryMessengerSwapTenWithPartner = (state, meta, id, d) => {
+    if (!d.inMonth || d.day == null) return false;
+    if (!IDS_MENSAJEROS.has(id)) return false;
+    if (!esNueveSeis(cellFor(state, id, d))) return false;
+    const partner = GRUPO_MENSAJEROS.find(
+      id2 => id2 !== id && esDiezSeis(cellFor(state, id2, d))
+    );
+    if (!partner) return false;
+    putCell(state, id, d.day, '10', '6');
+    putCell(state, partner, d.day, '9', '6');
+    enforceTrioOneTenOneFive(state, meta, d.day);
+    return true;
+  };
+
+  /** Mensajero 9/6 → 9/5 si aún no hay otro con pm=5 ese día. */
+  const tryBrutal96to95Messenger = (state, meta, id, d) => {
+    if (!IDS_MENSAJEROS.has(id)) return false;
+    if (esDiaTodosNueveSeis(d, meta.days)) return false;
+    if (!esNueveSeis(cellFor(state, id, d))) return false;
+    const otroConCinco = GRUPO_MENSAJEROS.some(
+      id2 => id2 !== id && normPm(cellFor(state, id2, d)) === '5'
+    );
+    if (otroConCinco) return false;
+    putCell(state, id, d.day, '9', '5');
+    enforceTrioOneTenOneFive(state, meta, d.day);
+    return true;
+  };
+
   /** 9/6 → 10/6 si no hay otro con am=10 en el grupo ese día. */
   const tryBrutal9to10 = (state, meta, id, d) => {
-    if (!esNueveSeis(state.cells[id]?.[d.day])) return false;
+    if (!d.inMonth || d.day == null) return false;
+    if (!esNueveSeis(cellFor(state, id, d))) return false;
+    if (id === 'cristian_uribe' && d.dow === 4) return false;
 
     if (IDS_MENSAJEROS.has(id)) {
       const otroConDiez = GRUPO_MENSAJEROS.some(
-        id2 => id2 !== id && normAm(state.cells[id2]?.[d.day]) === '10'
+        id2 => id2 !== id && normAm(cellFor(state, id2, d)) === '10'
       );
       if (otroConDiez) return false;
     } else if (esDuoConRestricciones(id)) {
       const pr = partnerDuo(id);
-      if (pr && normAm(state.cells[pr]?.[d.day]) === '10') return false;
+      if (pr && normAm(cellFor(state, pr, d)) === '10') return false;
     }
 
     putCell(state, id, d.day, '10', '6');
@@ -354,24 +391,116 @@
 
   /** Yo 9/6 y compañero 10/6 → yo 9/5. Solo dúos con restricciones. */
   const tryBrutal96to95partnerTen = (state, meta, id, d) => {
+    if (!d.inMonth || d.day == null) return false;
     if (!esDuoConRestricciones(id)) return false;
     const pr = partnerDuo(id);
     if (!pr) return false;
-    if (!esNueveSeis(state.cells[id]?.[d.day])) return false;
-    if (!esDiezSeis(state.cells[pr]?.[d.day]))  return false;
+    if (!esNueveSeis(cellFor(state, id, d))) return false;
+    if (!esDiezSeis(cellFor(state, pr, d)))  return false;
     putCell(state, id, d.day, '9', '5');
     return true;
   };
 
   /** Ambos 9/6 → yo 9/5. Solo dúos con restricciones. */
   const tryBrutal96to95partnerNine = (state, meta, id, d) => {
+    if (!d.inMonth || d.day == null) return false;
     if (!esDuoConRestricciones(id)) return false;
     const pr = partnerDuo(id);
     if (!pr) return false;
-    if (!esNueveSeis(state.cells[id]?.[d.day])) return false;
-    if (!esNueveSeis(state.cells[pr]?.[d.day]))  return false;
+    if (!esNueveSeis(cellFor(state, id, d))) return false;
+    if (!esNueveSeis(cellFor(state, pr, d)))  return false;
     putCell(state, id, d.day, '9', '5');
     return true;
+  };
+
+  /** Cap Cristian >44h sin violar reglas (jue nunca am=10; mié/vie nunca pm=5). */
+  const capCristianTo44 = (state, meta, minDay) => {
+    const id     = 'cristian_uribe';
+    const chunks = buildWeekChunks(meta);
+    const dayOk  = dayOkMin(minDay);
+
+    chunks.forEach((chunk) => {
+      if (!esChunkCompleto(chunk)) return;
+      let guard = 0;
+      while (sumWeekHours(id, chunk, state) > CFG.HORAS_TOPE_SEMANA && guard < 12) {
+        guard++;
+        const cands = chunk
+          .filter(d => esMutable(d, dayOk) && d.dow !== 4 && d.dow !== 3 && d.dow !== 5
+                       && esNueveSeis(cellFor(state, id, d)))
+          .sort((a, b) => b.dow - a.dow);
+        let bajado = false;
+        for (const d of cands) {
+          if (tryBrutal9to10(state, meta, id, d)) { bajado = true; break; }
+        }
+        if (!bajado) break;
+      }
+    });
+  };
+
+  /**
+   * Pasada final: no-fijos en semana calendario completa = exactamente 44h.
+   * Solo muta días del mes visible; respeta días externos (crossMonthCells).
+   */
+  const finalizeNonFijo44Hours = (state, meta, minDay) => {
+    const chunks = buildWeekChunks(meta);
+    const dayOk  = dayOkMin(minDay);
+
+    for (let mega = 0; mega < 80; mega++) {
+      let progressed = false;
+
+      EMPLEADOS.forEach(({ id }) => {
+        if (IDS_FIJO.has(id) || id === 'jhonny_rodriguez') return;
+
+        chunks.forEach((chunk) => {
+          if (!esChunkCompleto(chunk)) return;
+          if (!window.ENGINE_HOURS.esSemanaEvaluable44(chunk, state)) return;
+
+          let guard = 0;
+          while (sumWeekHours(id, chunk, state) !== CFG.HORAS_TOPE_SEMANA && guard < 40) {
+            guard++;
+            const full = sumWeekHours(id, chunk, state);
+
+            if (full > CFG.HORAS_TOPE_SEMANA) {
+              if (id === 'cristian_uribe') {
+                capCristianTo44(state, meta, minDay);
+                if (sumWeekHours(id, chunk, state) < full) { progressed = true; continue; }
+              }
+              if (tryBajarUnaHora(state, meta, id, chunk, dayOk)) {
+                progressed = true;
+                continue;
+              }
+              if (IDS_MENSAJEROS.has(id)) {
+                const cands = chunk
+                  .filter(d => esMutable(d, dayOk) && d.dow >= 1 && d.dow <= 5
+                               && esNueveSeis(cellFor(state, id, d)))
+                  .sort((a, b) => b.dow - a.dow);
+                for (const d of cands) {
+                  if (tryBrutal96to95Messenger(state, meta, id, d)) { progressed = true; break; }
+                  if (tryMessengerSwapTenWithPartner(state, meta, id, d)) { progressed = true; break; }
+                }
+                if (progressed) continue;
+              }
+              break;
+            }
+
+            if (full < CFG.HORAS_TOPE_SEMANA) {
+              const d = chunk.find(d =>
+                esMutable(d, dayOk) && d.dow >= 1 && d.dow <= 5
+                && esNueveCinco(cellFor(state, id, d))
+              );
+              if (d) {
+                putCell(state, id, d.day, '9', '6');
+                progressed = true;
+                continue;
+              }
+              break;
+            }
+          }
+        });
+      });
+
+      if (!progressed) break;
+    }
   };
 
   // ─── EXPORT ──────────────────────────────────────────────────────────────────
@@ -380,10 +509,12 @@
     capWeeklyTo44,
     capFijosTo44,
     capJhonnyTo44,
+    capCristianTo44,
     squeezeGrupoB,
     liftWeeklyTo44,
     liftJhonny,
     forceWithinCeiling,
+    finalizeNonFijo44Hours,
   };
 
   window.ENGINE_CAP = ENGINE_CAP;

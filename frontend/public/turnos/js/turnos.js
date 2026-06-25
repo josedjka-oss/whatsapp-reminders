@@ -15,7 +15,7 @@
     CFG, EMPLEADOS,
     GRUPO_MENSAJEROS, GRUPO_FIJO,
     IDS_FIJO, IDS_MENSAJEROS,
-    DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO,
+    DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO,
     DUO_JHONNY_CRISTIAN,
     formatEmpNameHtml,
     teamClassForEmpId,
@@ -34,6 +34,7 @@
     countSabadosLaborables,
     pad2,
     esChunkCompleto,
+    adjacentMonthKeys,
   } = window.ENGINE_CALENDAR;
 
   const {
@@ -75,17 +76,24 @@
   };
 
   const { ensureStateShape,
+          applyPostCapRules,
+          runMessengerForwardRepair,
           fillMissingCellsOnly,
           recalcExtras,
           step_normalizeSabadoEntrada } = window.ENGINE_SCHEDULER;
-  const { liftWeeklyTo44, capWeeklyTo44 } = window.ENGINE_CAP;
   const { buildLocksFromCells }     = window.ENGINE_PUT_CELL;
   const { getLunchDisplay,
           normalizeLunchTime }  = window.ENGINE_LUNCH;
 
   // ── CONSTANTES ─────────────────────────────────────────────────────────────
 
-  const COLLECTION  = 'programacionAlmuerzos'; // misma colección que la página original
+  const FORWARD_REPAIR_IDS = new Set([
+    ...IDS_MENSAJEROS,
+    ...DUO_SANTIAGO_MIGUEL,
+    ...DUO_JESUS_BRANDON,
+    ...DUO_BRAYAN_MAURICIO,
+  ]);
+  const COLLECTION  = 'programacionAlmuerzos';
   const COL_PHONES  = 'empleadosTelefonos';
   const NO_LAB_MARK = CFG.NO_LAB_MARK;
   const DIAS_SEMANA = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
@@ -101,6 +109,7 @@
     flagsDiaMarcadoNoLab: {},
     trioAusentePorDia:    {},
     manualAmPmLocks:      {},
+    crossMonthCells:      {},
   };
 
   // ── HELPERS DOM ────────────────────────────────────────────────────────────
@@ -164,6 +173,78 @@
     );
   };
 
+  /** Restaura solo celdas que el usuario bloqueó manualmente (no toda la planilla). */
+  const overlayLockedCells = (savedCells, locks) => {
+    if (!savedCells || !locks) return;
+    EMPLEADOS.forEach(({ id }) => {
+      const empLocks = locks[id];
+      if (!empLocks) return;
+      Object.keys(empLocks).forEach((dayStr) => {
+        const day   = Number(dayStr);
+        const fl    = empLocks[dayStr] || empLocks[day];
+        const saved = savedCells[id]?.[dayStr] ?? savedCells[id]?.[day];
+        if (!saved || !fl) return;
+        if (!state.cells[id]) state.cells[id] = {};
+        const cur = state.cells[id][day] || { am: '', pm: '' };
+        state.cells[id][day] = {
+          am: fl.am ? String(saved.am ?? '') : cur.am,
+          pm: fl.pm ? String(saved.pm ?? '') : cur.pm,
+        };
+      });
+    });
+  };
+
+  const ingestCellsToCrossMonth = (cells, sourceMonthKey, targetMonthKey) => {
+    if (!cells) return;
+    const srcMeta = getMonthMeta(sourceMonthKey);
+    const weeks   = buildWeekChunks(getMonthMeta(targetMonthKey));
+    if (!state.crossMonthCells) state.crossMonthCells = {};
+
+    weeks.forEach((week) => {
+      week.forEach((d) => {
+        if (d.inMonth) return;
+        const srcDay = srcMeta.days.find((x) => x.ymd === d.ymd);
+        if (!srcDay) return;
+        EMPLEADOS.forEach(({ id }) => {
+          const c = cells[id]?.[srcDay.day] ?? cells[id]?.[String(srcDay.day)];
+          if (!c) return;
+          if (!state.crossMonthCells[id]) state.crossMonthCells[id] = {};
+          state.crossMonthCells[id][d.ymd] = {
+            am: c.am != null ? String(c.am) : '',
+            pm: c.pm != null ? String(c.pm) : '',
+          };
+        });
+      });
+    });
+  };
+
+  const loadAdjacentMonthCells = async (monthKey) => {
+    const db = window.almuerzoDb;
+    if (!db) return;
+    state.crossMonthCells = {};
+    const { prev, next } = adjacentMonthKeys(monthKey);
+    for (const adjKey of [prev, next]) {
+      try {
+        let snap;
+        try {
+          snap = await db.collection(COLLECTION).doc(adjKey).get({ source: 'server' });
+        } catch (_) {
+          snap = await db.collection(COLLECTION).doc(adjKey).get({ source: 'cache' });
+        }
+        if (!snap.exists) continue;
+        ingestCellsToCrossMonth(snap.data()?.cells, adjKey, monthKey);
+      } catch (err) {
+        console.warn('Turnos: no se pudo cargar mes adyacente', adjKey, err);
+      }
+    }
+  };
+
+  const rebalanceAfterCrossMonth = (monthKey) => {
+    const meta = getMonthMeta(monthKey);
+    applyPostCapRules(state, meta, monthKey);
+    recalcExtras(state, monthKey);
+  };
+
   let autoSaveTimer = null;
   const scheduleAutoSave = () => {
     if (READ_ONLY) return;
@@ -174,7 +255,7 @@
   let planillaSyncMonthKey = '';
 
   const applyRemotePlanilla = (monthKey, payload, meta) => {
-    applyPayload(monthKey, payload, { remote: !!meta?.remote });
+    void applyPayload(monthKey, payload, { remote: !!meta?.remote });
   };
 
   const flushPendingPlanillaSync = () => {
@@ -431,7 +512,7 @@
   const attachListeners = (wrap, monthKey) => {
     if (READ_ONLY) return;
 
-    // Edición manual am/pm — solo la celda editada; sin reparación automática del resto
+    // Edición manual am/pm — trío/dúos reparan días siguientes
     wrap.querySelectorAll('.cell-in:not(.cell-in-lunch)').forEach((inp) => {
       inp.addEventListener('blur', (ev) => {
         const raw = ev.target?.getAttribute('data-cell') || '';
@@ -439,7 +520,11 @@
         if (!m) return;
         lockAmPmField(m[1], Number(m[2]), m[3]);
         collectFromDom();
-        recalcExtras(state, monthKey);
+        if (FORWARD_REPAIR_IDS.has(m[1])) {
+          runMessengerForwardRepair(state, monthKey, Number(m[2]), m[1]);
+        } else {
+          rebalanceAfterCrossMonth(monthKey);
+        }
         render(true);
         flushPendingPlanillaSync();
         scheduleAutoSave();
@@ -535,7 +620,7 @@
     await loadMonthOrGenerate(getActiveMonthKey());
   };
 
-  const bootstrapEmptyMonth = (monthKey) => {
+  const bootstrapEmptyMonth = async (monthKey) => {
     state = {
       monthKey,
       horasExtras:          {},
@@ -544,8 +629,11 @@
       flagsDiaMarcadoNoLab: {},
       trioAusentePorDia:    {},
       manualAmPmLocks:      {},
+      crossMonthCells:      {},
     };
     ensureStateShape(state, monthKey);
+    await loadAdjacentMonthCells(monthKey);
+    rebalanceAfterCrossMonth(monthKey);
     render(true);
     setStatus('Planilla lista.', '');
   };
@@ -568,11 +656,11 @@
         fromCache = true;
       }
       if (!snap.exists) {
-        bootstrapEmptyMonth(monthKey);
+        await bootstrapEmptyMonth(monthKey);
         startPlanillaLiveSync(monthKey);
         return;
       }
-      applyPayload(monthKey, snap.data());
+      await applyPayload(monthKey, snap.data());
       window.PLANILLA_FIRESTORE_SYNC?.seedRevisionFromPayload?.(monthKey, snap.data());
       startPlanillaLiveSync(monthKey);
       if (fromCache) {
@@ -592,8 +680,13 @@
 
   // ── APPLY PAYLOAD ──────────────────────────────────────────────────────────
 
-  const applyPayload = (monthKey, payload, options = {}) => {
+  const applyPayload = async (monthKey, payload, options = {}) => {
     syncMonthPicker(monthKey);
+    const savedCells = payload?.cells ? cloneCells(payload.cells) : null;
+    const savedLocks = payload?.manualAmPmLocks
+      ? JSON.parse(JSON.stringify(payload.manualAmPmLocks))
+      : {};
+
     state = {
       monthKey,
       horasExtras:          {},
@@ -602,38 +695,16 @@
       flagsDiaMarcadoNoLab: {},
       trioAusentePorDia:    {},
       manualAmPmLocks:      {},
+      crossMonthCells:      {},
     };
 
     if (payload && typeof payload === 'object') {
-      // Cells
-      if (payload.cells) {
-        Object.keys(payload.cells).forEach((empId) => {
-          if (!state.cells[empId]) state.cells[empId] = {};
-          if (!state.lunchOverrides[empId]) state.lunchOverrides[empId] = {};
-          const byDay = payload.cells[empId];
-          Object.keys(byDay).forEach((dayStr) => {
-            const day = Number(dayStr);
-            const v   = byDay[dayStr];
-            if (v && typeof v === 'object') {
-              state.cells[empId][day] = {
-                am: v.am != null ? String(v.am) : '',
-                pm: v.pm != null ? String(v.pm) : '',
-              };
-              if (v.lunch != null && String(v.lunch).trim() !== '') {
-                state.lunchOverrides[empId][day] = normalizeLunchTime(v.lunch);
-              }
-            }
-          });
-        });
-      }
-
       if (payload.lunchOverrides) {
         Object.keys(payload.lunchOverrides).forEach((empId) => {
           if (!state.lunchOverrides[empId]) state.lunchOverrides[empId] = {};
-          const byDay = payload.lunchOverrides[empId];
-          Object.keys(byDay).forEach((dayStr) => {
+          Object.keys(payload.lunchOverrides[empId]).forEach((dayStr) => {
             const day = Number(dayStr);
-            const val = byDay[dayStr];
+            const val = payload.lunchOverrides[empId][dayStr];
             if (val != null && String(val).trim() !== '') {
               state.lunchOverrides[empId][day] = normalizeLunchTime(val);
             }
@@ -641,12 +712,23 @@
         });
       }
 
-      // Flags
+      if (savedCells) {
+        Object.keys(savedCells).forEach((empId) => {
+          Object.keys(savedCells[empId] || {}).forEach((dayStr) => {
+            const day = Number(dayStr);
+            const v   = savedCells[empId][dayStr];
+            if (v?.lunch != null && String(v.lunch).trim() !== '') {
+              if (!state.lunchOverrides[empId]) state.lunchOverrides[empId] = {};
+              state.lunchOverrides[empId][day] = normalizeLunchTime(v.lunch);
+            }
+          });
+        });
+      }
+
       if (payload.flagsDiaMarcadoNoLab) {
         state.flagsDiaMarcadoNoLab = JSON.parse(JSON.stringify(payload.flagsDiaMarcadoNoLab));
       }
 
-      // Migración: flags de trío en flagsDiaMarcadoNoLab → trioAusentePorDia
       GRUPO_MENSAJEROS.forEach((eid) => {
         const byD = state.flagsDiaMarcadoNoLab[eid];
         if (!byD) return;
@@ -659,7 +741,6 @@
         });
       });
 
-      // trioAusentePorDia
       if (payload.trioAusentePorDia) {
         Object.keys(payload.trioAusentePorDia).forEach((k) => {
           const day = Number(k);
@@ -669,34 +750,14 @@
           }
         });
       }
-
-      if (payload.manualAmPmLocks && typeof payload.manualAmPmLocks === 'object') {
-        state.manualAmPmLocks = JSON.parse(JSON.stringify(payload.manualAmPmLocks));
-      }
     }
 
-    // Limpiar días no-laborables
-    const meta = getMonthMeta(monthKey);
-    meta.days.forEach(({ day, noLaborable }) => {
-      if (!noLaborable) return;
-      EMPLEADOS.forEach(({ id }) => {
-        if (state.cells[id]) state.cells[id][day] = { am: '', pm: '' };
-        if (state.flagsDiaMarcadoNoLab?.[id]?.[day])
-          delete state.flagsDiaMarcadoNoLab[id][day];
-      });
-      delete state.trioAusentePorDia[day];
-    });
+    ensureStateShape(state, monthKey);
+    overlayLockedCells(savedCells, savedLocks);
+    state.manualAmPmLocks = savedLocks;
 
-    const hasSavedCells = payload?.cells && Object.keys(payload.cells).length > 0;
-    if (hasSavedCells) {
-      fillMissingCellsOnly(state, monthKey);
-      // Ajustar 44h antes de bloquear celdas (locks impiden lift/cap).
-      liftWeeklyTo44(state, meta, null, null);
-      capWeeklyTo44(state, meta, null);
-      refreshManualLocksFromCells(meta);
-    } else {
-      ensureStateShape(state, monthKey);
-    }
+    await loadAdjacentMonthCells(monthKey);
+    rebalanceAfterCrossMonth(monthKey);
     recalcExtras(state, monthKey);
     render(true);
   };

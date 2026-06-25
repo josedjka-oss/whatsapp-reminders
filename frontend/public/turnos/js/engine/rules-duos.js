@@ -41,7 +41,7 @@
     const swapRoles  = weekIdx % 2 === 1;
 
     chunk.forEach((d) => {
-      if (d.day < fromDay || d.noLaborable || d.dow < 1 || d.dow > 5) return;
+      if (!d.inMonth || d.day == null || d.day < fromDay || d.noLaborable || d.dow < 1 || d.dow > 5) return;
       if (esDiaTodosNueveSeis(d, metaDays)) return;
 
       const col = d.dow - 1;
@@ -59,7 +59,7 @@
     });
 
     chunk.forEach((d) => {
-      if (d.day < fromDay || d.noLaborable || !d.esSabado) return;
+      if (!d.inMonth || d.day == null || d.day < fromDay || d.noLaborable || !d.esSabado) return;
       putCell(state, id0, d.day, CFG.AM_SABADO, '5');
       putCell(state, id1, d.day, CFG.AM_SABADO, '5');
     });

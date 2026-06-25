@@ -16,12 +16,13 @@
  * 12.  Lift no-fijos <44h (excepto Jhonny)
  * 13.  Repair dúo Brayan Yate / Mauricio
  * 14.  Enforce trío (post-lift)
- * 15.  Enforce fijos: 9/6 lun-vie, 9/5 sáb
- * 16.  Cap fijos (semanas con festivo pueden haber subido >44h)
- * 17.  Enforce Jhonny: pm5 mié-jue-vie, nunca am10
+ * 15.  Enforce fijos: 9/6 lun-vie, 9:30/5 sáb
+ * 17.  Enforce Jhonny: pm5 mié-jue-vie, am10 solo jueves
  * 18.  Lift Jhonny <44h
  * 19.  Cap Jhonny >44h
  * 20.  Force within ceiling (último recurso, excluye fijos y Jhonny)
+ * 21.  Enforce Cristian (después del cap — jueves nunca am=10)
+ * 22.  Re-enforce fijos + sábado 9:30
  */
 (function () {
   'use strict';
@@ -59,12 +60,13 @@
 
   const {
     capWeeklyTo44,
-    capFijosTo44,
     capJhonnyTo44,
+    capCristianTo44,
     squeezeGrupoB,
     liftWeeklyTo44,
     liftJhonny,
     forceWithinCeiling,
+    finalizeNonFijo44Hours,
   } = window.ENGINE_CAP;
 
   const { putCell } = window.ENGINE_PUT_CELL;
@@ -211,6 +213,19 @@
     });
   };
 
+  /** Pasos finales tras cap/lift: Jhonny, Cristian, fijos, sábado. */
+  const applyPostCapRules = (state, meta, monthKey, minDay = null) => {
+    enforceJhonny(state, meta, minDay);
+    liftJhonny(state, meta, monthKey, minDay);
+    capJhonnyTo44(state, meta, minDay);
+    forceWithinCeiling(state, meta, minDay);
+    enforceCristian(state, meta, minDay);
+    capCristianTo44(state, meta, minDay);
+    step_enforceGrupoFijo(state, meta);
+    forceSabadoEntrada930(state, meta);
+    finalizeNonFijo44Hours(state, meta, minDay);
+  };
+
   // ─── PIPELINE PRINCIPAL ───────────────────────────────────────────────────────
 
   /**
@@ -262,13 +277,7 @@
     liftWeeklyTo44(state, meta, null, null);    // 14d — 44h tras restaurar trío/dúos (paso 12 queda anulado por 13b)
     capWeeklyTo44(state, meta, null);           // 14e
     step_enforceGrupoFijo(state, meta);         // 15
-    capFijosTo44(state, meta);                  // 16
-    enforceJhonny(state, meta, null);           // 17
-    enforceCristian(state, meta, null);         // 17b
-    liftJhonny(state, meta, monthKey, null);      // 18
-    capJhonnyTo44(state, meta, null);           // 19
-    forceWithinCeiling(state, meta, null);      // 20
-    forceSabadoEntrada930(state, meta);         // 21 — todos los sáb laborables 9:30
+    applyPostCapRules(state, meta, monthKey);    // 17–22
 
     recalcExtras(state, monthKey);
   };
@@ -347,12 +356,7 @@
       squeezeGrupoB(state, meta, repairFromDay);
       capWeeklyTo44(state, meta, repairFromDay);
       enforceTrioOneTenOneFive(state, meta, repairFromDay);
-      enforceJhonny(state, meta, repairFromDay);
-      enforceCristian(state, meta, repairFromDay);
-      liftJhonny(state, meta, monthKey, repairFromDay);
-      capJhonnyTo44(state, meta, repairFromDay);
-      capFijosTo44(state, meta, repairFromDay);
-      forceWithinCeiling(state, meta, repairFromDay);
+      applyPostCapRules(state, meta, monthKey, repairFromDay);
     }
 
     restoreCellsBackup(state, backup);
@@ -385,6 +389,7 @@
 
   const ENGINE_SCHEDULER = {
     ensureStateShape,
+    applyPostCapRules,
     fillEmptyCellsOnly,
     fillMissingCellsOnly,
     repairDuoBrayanMauricio,

@@ -10,7 +10,16 @@
   const { CFG, IDS_FIJO, usaAlmuerzoHoraSabado, usaEntradaSabadoNueve } = window.ENGINE_CONSTANTS;
   const { esChunkCompleto } = window.ENGINE_CALENDAR;
 
-  // ─── CONVERSIÓN AM/PM ─────────────────────────────────────────────────────────
+  /** Celda am/pm: mes visible en cells; días externos en crossMonthCells. */
+  const getCellForDayMeta = (empId, d, stateRef) => {
+    if (!d) return null;
+    if (d.inMonth && d.day != null) {
+      return stateRef?.cells?.[empId]?.[d.day]
+        ?? stateRef?.cells?.[empId]?.[String(d.day)]
+        ?? null;
+    }
+    return stateRef?.crossMonthCells?.[empId]?.[d.ymd] ?? null;
+  };
 
   /**
    * Normaliza el valor de entrada (am): '9','09' → 9; '10','010' → 10.
@@ -151,19 +160,47 @@
   // ─── SUMA SEMANAL ─────────────────────────────────────────────────────────────
 
   /**
-   * Suma de horas mostradas en el chunk (lun–sáb) para un empleado.
-   * @param {string}    empId
-   * @param {DayMeta[]} chunk
-   * @param {object}    stateRef
-   * @returns {number}
+   * Suma lun–sáb de la semana calendario (incluye lun/mar del mes anterior si aplica).
    */
   const sumWeekHours = (empId, chunk, stateRef) =>
     chunk.reduce((acc, d) => {
-      const h = getDisplayedHours(d, stateRef.cells[empId]?.[d.day], empId, stateRef);
+      const cell = getCellForDayMeta(empId, d, stateRef);
+      const h    = getDisplayedHours(d, cell, empId, stateRef);
       return acc + (h ?? 0);
     }, 0);
 
-  // ─── TECHO SEMANAL (CARRY) ───────────────────────────────────────────────────
+  /** Solo días visibles/editables del mes en el chunk. */
+  const sumInMonthWeekHours = (empId, chunk, stateRef) =>
+    chunk.reduce((acc, d) => {
+      if (!d.inMonth || d.day == null) return acc;
+      const cell = getCellForDayMeta(empId, d, stateRef);
+      const h    = getDisplayedHours(d, cell, empId, stateRef);
+      return acc + (h ?? 0);
+    }, 0);
+
+  /** Horas de la semana que caen fuera del mes (mes anterior/siguiente). */
+  const externalWeekHours = (empId, chunk, stateRef) =>
+    sumWeekHours(empId, chunk, stateRef) - sumInMonthWeekHours(empId, chunk, stateRef);
+
+  /** Objetivo de horas editables en el mes para cerrar la semana en 44h. */
+  const targetInMonthWeekHours = (empId, chunk, stateRef) =>
+    Math.max(0, CFG.HORAS_TOPE_SEMANA - externalWeekHours(empId, chunk, stateRef));
+
+  /** Semana lun–sáb evaluable a 44h (días externos con datos en crossMonthCells). */
+  const esSemanaEvaluable44 = (chunk, stateRef) => {
+    if (!esChunkCompleto(chunk)) return false;
+    const externos = chunk.filter((d) => !d.inMonth && !d.noLaborable);
+    if (!externos.length) return true;
+    const { EMPLEADOS } = window.ENGINE_CONSTANTS;
+    return externos.every((d) =>
+      EMPLEADOS.every(({ id }) => {
+        const c  = getCellForDayMeta(id, d, stateRef);
+        const am = String(c?.am ?? '').trim();
+        const pm = String(c?.pm ?? '').trim();
+        return am !== '' || pm !== '';
+      })
+    );
+  };
 
   /**
    * ¿Puede este empleado arrastrar déficit de semanas anteriores?
@@ -207,14 +244,14 @@
   };
 
   /**
-   * Techo de horas para un chunk: 44 + carry (solo no-fijos y chunks completos).
-   * Fijos: no tienen techo de 44h (siempre 47h objetivo, sin lógica de cap aquí).
+   * Techo semanal para cap/lift: no-fijos siempre 44h en semana calendario completa.
+   * Fijos: sin techo (horario fijo ~47h).
    */
   const techoSemanal = (empId, chunks, chunkIdx, stateRef) => {
-    if (IDS_FIJO.has(empId)) return Infinity; // fijos no tienen cap de 44h
+    if (IDS_FIJO.has(empId)) return Infinity;
     const ch = chunks[chunkIdx];
     if (!esChunkCompleto(ch)) return CFG.HORAS_TOPE_SEMANA;
-    return CFG.HORAS_TOPE_SEMANA + carryAntesDe(empId, chunks, chunkIdx, stateRef);
+    return CFG.HORAS_TOPE_SEMANA;
   };
 
   // ─── HORAS EXTRAS ─────────────────────────────────────────────────────────────
@@ -299,6 +336,11 @@
     esAusenteEntradaCeroRaw,
     esAusenteTrio,
     sumWeekHours,
+    sumInMonthWeekHours,
+    externalWeekHours,
+    targetInMonthWeekHours,
+    esSemanaEvaluable44,
+    getCellForDayMeta,
     puedeArrastrarDeficit,
     chunkTieneAusenciaMarcada,
     carryAntesDe,

@@ -60,7 +60,7 @@
     const rotateRoles = weekIdx % 2 === 1;
 
     chunk.forEach((d) => {
-      if (d.day < fromDay || d.noLaborable) return;
+      if (!d.inMonth || d.day == null || d.day < fromDay || d.noLaborable) return;
 
       if (d.esSabado || d.dow === 6) {
         GRUPO_MENSAJEROS.forEach((id) => putCell(state, id, d.day, CFG.AM_SABADO, '5'));
@@ -135,7 +135,7 @@
    */
   const enforceTrioOneTenOneFive = (state, meta, fromDay = 1) => {
     meta.days.forEach((d) => {
-      if (d.day < fromDay || d.noLaborable) return;
+      if (!d.inMonth || d.day == null || d.day < fromDay || d.noLaborable) return;
 
       // Sábado: todos 9:30/5
       if (d.dow === 6) {
@@ -186,7 +186,7 @@
     chunks.forEach((chunk, weekIdx) => {
       const pickId = GRUPO_MENSAJEROS[weekIdx % GRUPO_MENSAJEROS.length];
       chunk.forEach((d) => {
-        if (d.day < fromDay || d.noLaborable) return;
+        if (!d.inMonth || d.day == null || d.day < fromDay || d.noLaborable) return;
         const aplica = esLunesLaborable(d) || esMartesPostFestivo(d, meta.days);
         if (!aplica) return;
         GRUPO_MENSAJEROS.forEach((id) => {

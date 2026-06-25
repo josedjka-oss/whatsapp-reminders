@@ -20,8 +20,9 @@
     buildWeekChunks,
     esLunesLaborable,
     esMartesPostFestivo,
+    esChunkCompleto,
   } = window.ENGINE_CALENDAR;
-  const { sumWeekHours, normAm, normPm } = window.ENGINE_HOURS;
+  const { sumWeekHours, techoSemanal, normAm, normPm, esSemanaEvaluable44 } = window.ENGINE_HOURS;
   const { lunesFestivoEnSemana } = window.ENGINE_RULES_JOHNNY;
 
   const validate = (state, monthKey) => {
@@ -35,11 +36,12 @@
     EMPLEADOS.forEach(({ id }) => {
       if (IDS_FIJO.has(id)) return;
       chunks.forEach((chunk, ci) => {
+        if (!esChunkCompleto(chunk) || !esSemanaEvaluable44(chunk, state)) return;
         const s = sumWeekHours(id, chunk, state);
         if (s !== CFG.HORAS_TOPE_SEMANA) {
           push('HORAS_SEMANA', id,
             `Semana ${ci + 1}: ${s}h (esperado ${CFG.HORAS_TOPE_SEMANA}h)`,
-            chunk[0]?.day, ci);
+            chunk.find(d => d.inMonth)?.day, ci);
         }
       });
     });

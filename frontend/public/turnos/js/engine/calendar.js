@@ -1,7 +1,6 @@
 /**
  * calendar.js
- * Construcción del calendario mensual: días, festivos, chunks semanales lun–sáb.
- * Sin efectos secundarios. Puras funciones.
+ * Calendario mensual: días, festivos, semanas calendario lun–sáb (domingo = cierre de semana).
  */
 (function () {
   'use strict';
@@ -14,44 +13,15 @@
   const pad2  = (n) => String(n).padStart(2, '0');
   const toYmd = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 
-  /**
-   * Retorna Set<string> de fechas festivas (YYYY-MM-DD) para el año dado.
-   * @param {number} year
-   * @returns {Set<string>}
-   */
   const getFestivoSet = (year) => new Set(FESTIVOS_CO[year] || []);
 
-  /**
-   * true si la fecha es domingo (getDay() === 0).
-   * @param {Date} d
-   */
   const esDomingo = (d) => d.getDay() === 0;
 
-  /**
-   * true si la fecha es no laborable (domingo o festivo).
-   * @param {Date} d
-   */
   const esNoLaborable = (d) => {
     if (esDomingo(d)) return true;
     return getFestivoSet(d.getFullYear()).has(toYmd(d));
   };
 
-  /**
-   * Construye el calendario completo del mes.
-   * @param {string} monthKey - formato "YYYY-MM"
-   * @returns {{ year, month, lastDay, days: DayMeta[] }}
-   *
-   * DayMeta:
-   *   day        {number}  1..31
-   *   date       {Date}
-   *   ymd        {string}  "YYYY-MM-DD"
-   *   dow        {number}  0=dom .. 6=sáb
-   *   dowLabel   {string}  "LUN", "MAR", ...
-   *   dowLong    {string}  "LUNES", "MARTES", ...
-   *   noLaborable {boolean}
-   *   festivo    {boolean}  festivo no-domingo (entre semana o sábado)
-   *   esSabado   {boolean}
-   */
   const getMonthMeta = (monthKey) => {
     const [y, m] = monthKey.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
@@ -73,123 +43,139 @@
         noLaborable: esDomingo(dt) || esFestivo,
         festivo:     esFestivo,
         esSabado:    dow === 6,
+        inMonth:     true,
       });
     }
 
     return { year: y, month: m, lastDay, days };
   };
 
-  /**
-   * Agrupa los días en trozos lunes–sábado.
-   * Los domingos se omiten. Trozos parciales al inicio/fin del mes son válidos.
-   * @param {{ days: DayMeta[] }} meta
-   * @returns {DayMeta[][]}
-   */
-  const buildWeekChunks = (meta) => {
-    const chunks = [];
-    let cur = [];
-    meta.days.forEach((d) => {
-      if (d.dow === 0) return; // omitir domingos
-      if (d.dow === 1 && cur.length) {
-        chunks.push(cur);
-        cur = [];
-      }
-      cur.push(d);
-      if (d.dow === 6) {
-        chunks.push(cur);
-        cur = [];
-      }
-    });
-    if (cur.length) chunks.push(cur);
-    return chunks;
+  /** Meta de un Date (puede estar fuera del mes visible). */
+  const dayMetaFromDate = (dt, monthMeta) => {
+    const ymd = toYmd(dt);
+    const dow = dt.getDay();
+    const inMonth = dt.getFullYear() === monthMeta.year && dt.getMonth() + 1 === monthMeta.month;
+    const esFestivo = !esDomingo(dt) && getFestivoSet(dt.getFullYear()).has(ymd);
+    return {
+      day:         inMonth ? dt.getDate() : null,
+      date:        dt,
+      ymd,
+      dow,
+      dowLabel:    DIAS_SEMANA[dow],
+      dowLong:     DIAS_SEMANA_LARGO[dow],
+      noLaborable: esDomingo(dt) || esFestivo,
+      festivo:     esFestivo,
+      esSabado:    dow === 6,
+      inMonth,
+    };
   };
 
   /**
-   * true si el chunk es una semana lun–sáb completa (6 días, lun→sáb).
-   * Los trozos cortados por inicio/fin de mes NO son semanas completas.
-   * @param {DayMeta[]} chunk
+   * Semanas calendario lun–sáb que tocan el mes.
+   * Si el mes empieza miércoles, la semana incluye lun/mar del mes anterior (inMonth=false).
+   * El domingo cierra la semana pero no se suma en horas.
    */
+  const buildCalendarWeeks = (meta) => {
+    if (!meta?.days?.length) return [];
+
+    const first = meta.days[0].date;
+    const last  = meta.days[meta.days.length - 1].date;
+
+    const monday = new Date(first);
+    const fdow   = monday.getDay();
+    monday.setDate(monday.getDate() + (fdow === 0 ? -6 : 1 - fdow));
+
+    const lastSat = new Date(last);
+    const ldow    = lastSat.getDay();
+    lastSat.setDate(lastSat.getDate() + (ldow === 6 ? 0 : 6 - ldow));
+
+    const weeks = [];
+    const cur   = new Date(monday);
+    while (cur <= lastSat) {
+      const week = [];
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(cur);
+        d.setDate(cur.getDate() + i);
+        week.push(dayMetaFromDate(d, meta));
+      }
+      weeks.push(week);
+      cur.setDate(cur.getDate() + 7);
+    }
+    return weeks;
+  };
+
+  /** Alias histórico — ahora devuelve semanas calendario completas lun–sáb. */
+  const buildWeekChunks = buildCalendarWeeks;
+
+  /** Semana calendario completa: lun–sáb (6 días laborables). */
   const esChunkCompleto = (chunk) =>
     Array.isArray(chunk) &&
     chunk.length === 6 &&
     chunk[0].dow === 1 &&
     chunk[chunk.length - 1].dow === 6;
 
-  /**
-   * El lunes de la semana que contiene `d` (puede ser fuera del mes).
-   * Usado para determinar si el lunes de esa semana es festivo.
-   * @param {DayMeta} d
-   * @param {DayMeta[]} allDays
-   * @returns {DayMeta|null}
-   */
+  /** Días del chunk editables en el mes visible. */
+  const chunkDiasEnMes = (chunk) =>
+    chunk.filter((d) => d.inMonth && d.day != null);
+
   const getLunesDeSemana = (d, allDays) => {
     const offset = d.dow === 1 ? 0 : d.dow === 0 ? -6 : -(d.dow - 1);
     const targetDay = d.day + offset;
     return allDays.find(x => x.day === targetDay) || null;
   };
 
-  /**
-   * true si `d` es lunes laborable normal (dow===1 y no festivo).
-   * @param {DayMeta} d
-   */
   const esLunesLaborable = (d) => d.dow === 1 && !d.noLaborable;
 
-  /**
-   * true si `d` es martes y el lunes de esa semana fue festivo.
-   * Lunes festivo → martes es el primer día laborable → reglas especiales.
-   * @param {DayMeta} d
-   * @param {DayMeta[]} allDays
-   */
   const esMartesPostFestivo = (d, allDays) => {
     if (d.dow !== 2) return false;
+    if (d.date) {
+      const lunDt = new Date(d.date);
+      lunDt.setDate(lunDt.getDate() - 1);
+      if (lunDt.getDay() !== 1) return false;
+      const ymd = toYmd(lunDt);
+      return getFestivoSet(lunDt.getFullYear()).has(ymd);
+    }
     const lun = getLunesDeSemana(d, allDays);
     return !!(lun && lun.festivo);
   };
 
-  /**
-   * true si la semana de `chunk` tiene lunes festivo.
-   * @param {DayMeta[]} chunk
-   */
   const chunkTieneLunesFestivo = (chunk) => {
     const lun = chunk.find(d => d.dow === 1);
     return !!(lun && lun.festivo);
   };
 
-  /**
-   * Cuenta sábados laborables en el mes (para columnas Σ en la UI).
-   * @param {{ days: DayMeta[] }} meta
-   */
   const countSabadosLaborables = (meta) =>
     meta.days.filter(d => d.dow === 6 && !d.noLaborable).length;
 
-  /**
-   * Retorna el chunk que termina en el sábado dado.
-   * @param {{ days: DayMeta[] }} meta
-   * @param {DayMeta} satDay
-   * @param {DayMeta[][]} chunks
-   */
+  /** Semana calendario que termina en el sábado visible del mes. */
   const findChunkEndingAtSaturday = (meta, satDay, chunks) => {
-    const ch = chunks.find(c => c.length && c[c.length - 1].day === satDay.day);
-    return ch || [];
+    const weeks = chunks || buildCalendarWeeks(meta);
+    return weeks.find(w => w[5]?.inMonth && w[5].day === satDay.day)
+      || weeks.find(w => w.some(x => x.inMonth && x.day === satDay.day && x.dow === 6))
+      || [];
   };
 
-  /**
-   * ¿Es un día donde todos los no-fijos deben estar 9/6?
-   * = lunes laborable normal O martes post-festivo.
-   * El trío mensajeros tiene excepción en martes post-festivo (pueden tener ajuste).
-   * @param {DayMeta} d
-   * @param {DayMeta[]} allDays
-   */
   const esDiaTodosNueveSeis = (d, allDays) => {
     if (d.noLaborable) return false;
     if (esLunesLaborable(d)) return true;
     return esMartesPostFestivo(d, allDays);
   };
 
+  /** Claves YYYY-MM de meses adyacentes necesarios para Σ semanal. */
+  const adjacentMonthKeys = (monthKey) => {
+    const [y, m] = monthKey.split('-').map(Number);
+    const prev = m === 1 ? `${y - 1}-12` : `${y}-${pad2(m - 1)}`;
+    const next = m === 12 ? `${y + 1}-01` : `${y}-${pad2(m + 1)}`;
+    return { prev, next };
+  };
+
   const ENGINE_CALENDAR = {
     getMonthMeta,
+    dayMetaFromDate,
+    buildCalendarWeeks,
     buildWeekChunks,
     esChunkCompleto,
+    chunkDiasEnMes,
     getLunesDeSemana,
     esLunesLaborable,
     esMartesPostFestivo,
@@ -197,6 +183,7 @@
     countSabadosLaborables,
     findChunkEndingAtSaturday,
     esDiaTodosNueveSeis,
+    adjacentMonthKeys,
     pad2,
     toYmd,
   };
