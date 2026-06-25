@@ -583,8 +583,9 @@
       }
       setStatus(READ_ONLY ? 'Consulta — datos cargados.' : 'Datos cargados desde Firebase.', 'ok');
     } catch (e) {
-      console.error(e);
-      setStatus('Error al cargar desde Firebase.', 'err');
+      console.error('Turnos loadMonthOrGenerate', monthKey, e);
+      const detail = e?.message ? String(e.message) : String(e);
+      setStatus(`Error al cargar desde Firebase: ${detail}`, 'err');
     }
   };
 

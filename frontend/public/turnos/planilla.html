@@ -842,15 +842,15 @@
 <header class="page-header">
   <h1>Programación de Turnos</h1>
   <p class="page-desc-long">
-    Planilla mensual de horarios. <strong>am</strong> = entrada (9 ó 10; <strong>sábado 9:30</strong> para todos).
-    <strong>pm</strong> = salida (5 = 17 h · 6 = 18 h). Sábado siempre salida 5.
-    Mensajeros (Harold · Diego · Dilan): un solo am=10 y un solo pm=5 por día.
-    No-fijos: 44 h/semana. Fijos (Jhon · Juan · Brayan R · Brandon · Jonathan): 47 h.
-    Johnny: nunca am=10; sale a las 5 los mié–jue–vie.
-    Aseo recepción lun–vie 9:00 · <strong>sáb 9:30</strong> (celda <strong style="color:#7b1fa2">morada</strong>).
-    <strong>Sábado:</strong> almuerzo <strong>30 min</strong> (ej. 12:00-12:30). Lun–vie sin cambio (1 h).
-    Juan Girón almuerza igual que Jhonny (1:00).
-    Basura 18:00 (lun, mié, vie): Harold, Diego, Dilan, Santiago, Cristian, Jhon, Jesús, Brayan Ramírez — solo si no sale a las 5; no en festivos; celda <strong style="color:#2e7d32">verde</strong>.
+    Planilla mensual de horarios. <strong>am</strong> = entrada (9, 10 o tarde: 1=13:00, 2=14:00…).
+    <strong>pm</strong> = salida (5 = 17 h · 6 = 18 h). Sábado: <strong>9:30/5</strong> (Jonathan y David: 9/5, almuerzo 1 h alternado).
+    Mensajeros: lunes 1 entra 10; entre semana 1×10 y 1×17/día. No-fijos: <strong>44 h/semana</strong>.
+    Fijos horario (Juan · Jhon Lozano · Brayan R · Jonathan): 9/6 lun–vie, 9:30/5 sáb.
+    Jhonny: lun/mar 9/6 · mié 9/5 · jue 10/6 · vie 9/5. Cristian: jue nunca 10; mié/vie puede 10.
+    Despacho (Jesús + Brandon rotan; Brayan R fijo). S/M + Juan (Juan fijo 9/6).
+    Aseo recepción lun–vie 9:00 · sáb 9:30 (celda <strong style="color:#7b1fa2">morada</strong>).
+    Almuerzo lun–vie 1 h; sáb 30 min (Jonathan/David 1 h). Jhon Lozano almuerza 3:00.
+    Basura 18:00 (lun, mié, vie): Harold, Diego, Dilan, Santiago, Cristian, Jhon, Jesús, Brayan Ramírez — celda <strong style="color:#2e7d32">verde</strong>.
   </p>
   <div class="page-legend-mobile" aria-label="Leyenda de colores">
     <span class="leg leg-aseo">Morado = aseo 9h / sáb 9:30</span>
@@ -980,23 +980,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Motor de horarios (orden obligatorio) -->
-<script src="js/engine/constants.js?v=20260614e"></script>
-<script src="js/engine/calendar.js?v=20260614e"></script>
-<script src="js/engine/hours.js?v=20260614e"></script>
-<script src="js/engine/cell-mutation.js?v=20260614e"></script>
-<script src="js/engine/recepcion-aseo.js?v=20260614e"></script>
-<script src="js/engine/sacada-basura.js?v=20260614e"></script>
-<script src="js/engine/rules-messengers.js?v=20260614e"></script>
-<script src="js/engine/rules-duos.js?v=20260614e"></script>
-<script src="js/engine/rules-johnny.js?v=20260614e"></script>
-<script src="js/engine/cap-engine.js?v=20260614e"></script>
-<script src="js/engine/scheduler.js?v=20260614e"></script>
-<script src="js/engine/lunch-engine.js?v=20260614e"></script>
-<script src="js/engine/validator.js?v=20260614e"></script>
+<script src="js/engine/constants.js?v=20260614f"></script>
+<script src="js/engine/calendar.js?v=20260614f"></script>
+<script src="js/engine/hours.js?v=20260614f"></script>
+<script src="js/engine/cell-mutation.js?v=20260614f"></script>
+<script src="js/engine/recepcion-aseo.js?v=20260614f"></script>
+<script src="js/engine/sacada-basura.js?v=20260614f"></script>
+<script src="js/engine/rules-messengers.js?v=20260614f"></script>
+<script src="js/engine/rules-duos.js?v=20260614f"></script>
+<script src="js/engine/rules-johnny.js?v=20260614f"></script>
+<script src="js/engine/cap-engine.js?v=20260614f"></script>
+<script src="js/engine/scheduler.js?v=20260614f"></script>
+<script src="js/engine/lunch-engine.js?v=20260614f"></script>
+<script src="js/engine/validator.js?v=20260614f"></script>
 
 <!-- Orquestador principal -->
-<script src="js/turnos-auth.js?v=20260614e"></script>
-<script src="js/turnos.js?v=20260614e"></script>
+<script src="js/turnos-auth.js?v=20260614f"></script>
+<script src="js/turnos.js?v=20260614f"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>

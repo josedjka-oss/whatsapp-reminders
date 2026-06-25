@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const { CFG, IDS_FIJO, usaAlmuerzoHoraSabado } = window.ENGINE_CONSTANTS;
+  const { CFG, IDS_FIJO, usaAlmuerzoHoraSabado, usaEntradaSabadoNueve } = window.ENGINE_CONSTANTS;
   const { esChunkCompleto } = window.ENGINE_CALENDAR;
 
   // ─── CONVERSIÓN AM/PM ─────────────────────────────────────────────────────────
