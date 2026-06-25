@@ -71,12 +71,24 @@ export default function DashboardPage() {
           {/* Nómina */}
           <button
             onClick={() => router.push("/nomina")}
-            className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 md:col-span-2 lg:col-span-4"
+            className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
           >
             <div className="text-5xl mb-4">💼</div>
             <h2 className="text-2xl font-bold mb-2">Nómina</h2>
             <p className="text-indigo-100 text-sm">
               Recibos quincenales, vales con foto y envío WhatsApp con enlace personalizado
+            </p>
+          </button>
+
+          {/* Turnos */}
+          <button
+            onClick={() => router.push("/turnos")}
+            className="bg-gradient-to-br from-teal-500 to-teal-700 text-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+          >
+            <div className="text-5xl mb-4">🗓️</div>
+            <h2 className="text-2xl font-bold mb-2">Turnos</h2>
+            <p className="text-teal-100 text-sm">
+              Planilla mensual de turnos, almuerzos y consulta en solo lectura
             </p>
           </button>
         </div>
