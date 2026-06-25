@@ -16,7 +16,7 @@
     GRUPO_MENSAJEROS, GRUPO_FIJO,
     IDS_FIJO, IDS_MENSAJEROS,
     DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO,
-    DUO_DESPACHO, DUO_JOHNNY_BRAYAN,
+    DUO_JHONNY_CRISTIAN,
     formatEmpNameHtml,
     teamClassForEmpId,
   } = window.ENGINE_CONSTANTS;
@@ -79,8 +79,7 @@
           recalcExtras,
           step_normalizeSabadoEntrada } = window.ENGINE_SCHEDULER;
   const { buildLocksFromCells }     = window.ENGINE_PUT_CELL;
-  const { buildJuanJesusLunch,
-          getLunchDisplay,
+  const { getLunchDisplay,
           normalizeLunchTime }  = window.ENGINE_LUNCH;
 
   // ── CONSTANTES ─────────────────────────────────────────────────────────────
@@ -274,7 +273,7 @@
 
   // ── RENDER CELDAS ──────────────────────────────────────────────────────────
 
-  const renderDayCells = (empId, rowKind, meta, monthKey, jjLunchByDay, chunks, aseoMap, basuraMap) => {
+  const renderDayCells = (empId, rowKind, meta, monthKey, chunks, aseoMap, basuraMap) => {
     const empLabel = EMPLEADOS.find(e => e.id === empId)?.name || empId;
     const roVal = (v) => {
       const t = formatAmDisplay(v);
@@ -341,7 +340,7 @@
         if (d.noLaborable) {
           html += `<td class="nl">${NO_LAB_MARK}</td>`;
         } else {
-          const txt = getLunchDisplay(empId, d, monthKey, state, jjLunchByDay) || '';
+          const txt = getLunchDisplay(empId, d, monthKey, state, meta) || '';
           html += `<td class="lunch-cell${oCls}">
             ${READ_ONLY
               ? `<span class="lunch-time-txt cell-readonly">${txt || '–'}</span>`
@@ -375,7 +374,6 @@
 
     const meta        = getMonthMeta(monthKey);
     const chunks      = buildWeekChunks(meta);
-    const jjLunchByDay = buildJuanJesusLunch(state, meta, monthKey);
     const aseoMap      = buildAseoRecepcionPorDia(state, meta, monthKey);
     const basuraMap    = buildBasuraPorDia(state, meta, monthKey);
     const wrap        = el('sheetWrap');
@@ -399,13 +397,13 @@
             <span class="he-lbl">H.ext.</span>
             <span class="he-val">${he}</span>
           </th>
-          ${renderDayCells(emp.id, 'am', meta, monthKey, jjLunchByDay, chunks, aseoMap, basuraMap)}
+          ${renderDayCells(emp.id, 'am', meta, monthKey, chunks, aseoMap, basuraMap)}
         </tr>
         <tr class="emp-lunch-row${tc}">
-          ${renderDayCells(emp.id, 'lunch', meta, monthKey, jjLunchByDay, chunks, aseoMap, basuraMap)}
+          ${renderDayCells(emp.id, 'lunch', meta, monthKey, chunks, aseoMap, basuraMap)}
         </tr>
         <tr class="emp-pm-row${tc}">
-          ${renderDayCells(emp.id, 'pm', meta, monthKey, jjLunchByDay, chunks, aseoMap, basuraMap)}
+          ${renderDayCells(emp.id, 'pm', meta, monthKey, chunks, aseoMap, basuraMap)}
         </tr>
         <tr class="spacer"><td colspan="${colCount}"></td></tr>`;
     });
@@ -706,7 +704,6 @@
     const monthKey     = state.monthKey;
     const meta         = getMonthMeta(monthKey);
     const chunks       = buildWeekChunks(meta);
-    const jjLunchByDay = buildJuanJesusLunch(state, meta, monthKey);
     const rows         = [];
     const satCols      = countSabadosLaborables(meta);
     const padHe        = meta.days.length + satCols;
@@ -741,7 +738,7 @@
         const c = state.cells[emp.id]?.[d.day] || {};
         const nl = d.noLaborable;
         rAm.push(nl ? NO_LAB_MARK : (formatAmDisplay(c.am) || ''));
-        rAl.push(nl ? NO_LAB_MARK : getLunchDisplay(emp.id, d, monthKey, state, jjLunchByDay));
+        rAl.push(nl ? NO_LAB_MARK : getLunchDisplay(emp.id, d, monthKey, state, meta));
         rPm.push(nl ? NO_LAB_MARK : (c.pm || ''));
         if (d.dow === 6) { rAm.push(''); rAl.push(''); rPm.push(''); }
       });

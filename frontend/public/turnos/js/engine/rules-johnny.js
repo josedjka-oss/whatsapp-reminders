@@ -1,65 +1,90 @@
 /**
- * rules-johnny.js
- * Johnny Rodriguez: reglas especiales de salida pm5.
- *   - Nunca entra a las 10.
- *   - Semana normal: sale mié, jue, vie a las 5 (pm=5).
- *   - Semana con lunes festivo: sale jue y vie a las 5.
- *   - Miércoles: pm=5 salvo si hay festivo lun-mié en esa semana (entonces pm=6 para recuperar h).
+ * rules-johnny.js — Jhonny Rodríguez y Cristian Uribe.
+ *
+ * Jhonny lun–vie:
+ *   Lun/Mar 9/6 · Mié 9/5 (9/6 si lunes festivo) · Jue 10/6 · Vie 9/5 · Sáb 9:30/5
+ *
+ * Cristian:
+ *   Jue nunca am=10 · Mié/Vie puede am=10 (pm=6) · Mié/Vie nunca pm=5
  */
 (function () {
   'use strict';
 
   const { CFG } = window.ENGINE_CONSTANTS;
+  const { getLunesDeSemana } = window.ENGINE_CALENDAR;
+  const { normAm, normPm } = window.ENGINE_HOURS;
 
   const putCell = window.ENGINE_PUT_CELL.putCell;
 
-  /**
-   * ¿Hay algún festivo entre el lunes y el miércoles de la semana de `d`?
-   */
-  const hayFestivoLunesMartesOMiercolesEnSemana = (meta, d) => {
-    if (d.dow < 1) return false;
-    const lunesDelDia = d.day - (d.dow - 1);
-    for (let o = 0; o <= 2; o++) {
-      const dm = meta.days.find(x => x.day === lunesDelDia + o);
-      if (dm && dm.festivo) return true;
-    }
-    return false;
+  const JHONNY_ID   = 'jhonny_rodriguez';
+  const CRISTIAN_ID = 'cristian_uribe';
+
+  /** true si el lunes de la semana de `d` fue festivo. */
+  const lunesFestivoEnSemana = (meta, d) => {
+    const lun = getLunesDeSemana(d, meta.days);
+    return !!(lun && lun.festivo);
   };
 
-  /**
-   * Aplica las reglas de salida pm5 de Jhonny para todo el mes (o desde minDay).
-   * @param {object} state
-   * @param {object} meta
-   * @param {number} [minDay]
-   */
+  /** @deprecated alias para cap-engine */
+  const hayFestivoLunesMartesOMiercolesEnSemana = (meta, d) =>
+    lunesFestivoEnSemana(meta, d);
+
   const enforceJhonny = (state, meta, minDay) => {
-    const id = 'jhonny_rodriguez';
     meta.days.forEach((d) => {
       if (minDay != null && d.day < minDay) return;
       if (d.noLaborable) return;
-      if (d.dow < 3 || d.dow > 5) return; // solo mié(3), jue(4), vie(5)
 
-      const c  = state.cells[id]?.[d.day];
-      let am = String(c?.am ?? '').trim();
-      // Johnny nunca entra a las 10
-      if (am === '10' || am === '010') am = '9';
+      if (d.esSabado || d.dow === 6) {
+        putCell(state, JHONNY_ID, d.day, CFG.AM_SABADO, CFG.PM_SAB);
+        return;
+      }
 
-      const conFestivo = hayFestivoLunesMartesOMiercolesEnSemana(meta, d);
-
-      if (d.dow === 4 || d.dow === 5) {
-        // Jue y vie: siempre pm=5
-        putCell(state, id, d.day, am || '9', '5');
+      if (d.dow === 1 || d.dow === 2) {
+        putCell(state, JHONNY_ID, d.day, CFG.AM_NORMAL, CFG.PM_NORMAL);
         return;
       }
       if (d.dow === 3) {
-        // Miércoles: pm=6 si hay festivo lun-mié (para recuperar horas), sino pm=5
-        putCell(state, id, d.day, am || '9', conFestivo ? '6' : '5');
+        const pm = lunesFestivoEnSemana(meta, d) ? CFG.PM_NORMAL : CFG.PM_AJUSTE;
+        putCell(state, JHONNY_ID, d.day, CFG.AM_NORMAL, pm);
+        return;
       }
+      if (d.dow === 4) {
+        putCell(state, JHONNY_ID, d.day, CFG.AM_AJUSTE, CFG.PM_NORMAL);
+        return;
+      }
+      if (d.dow === 5) {
+        putCell(state, JHONNY_ID, d.day, CFG.AM_NORMAL, CFG.PM_AJUSTE);
+      }
+    });
+  };
+
+  const enforceCristian = (state, meta, minDay) => {
+    meta.days.forEach((d) => {
+      if (minDay != null && d.day < minDay) return;
+      if (d.noLaborable || d.esSabado) return;
+
+      const c  = state.cells[CRISTIAN_ID]?.[d.day];
+      let am   = normAm(c) || CFG.AM_NORMAL;
+      let pm   = normPm(c) || CFG.PM_NORMAL;
+
+      if (d.dow === 4 && am === CFG.AM_AJUSTE) {
+        am = CFG.AM_NORMAL;
+      }
+      if ((d.dow === 3 || d.dow === 5) && pm === CFG.PM_AJUSTE) {
+        pm = CFG.PM_NORMAL;
+      }
+      if (am === CFG.AM_AJUSTE && pm === CFG.PM_AJUSTE) {
+        pm = CFG.PM_NORMAL;
+      }
+
+      putCell(state, CRISTIAN_ID, d.day, am, pm);
     });
   };
 
   const ENGINE_RULES_JOHNNY = {
     enforceJhonny,
+    enforceCristian,
+    lunesFestivoEnSemana,
     hayFestivoLunesMartesOMiercolesEnSemana,
   };
 

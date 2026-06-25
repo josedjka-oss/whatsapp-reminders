@@ -17,13 +17,30 @@
    * @param {string|number} v
    * @returns {number|null}
    */
+  /**
+   * Entrada am: 9/10/930 mañana; 1→13:00, 2→14:00… (tarde, se muestra tal cual en celda).
+   */
   const parseAm = (v) => {
     const raw = String(v ?? '').trim().toLowerCase().replace(/\s/g, '');
     if (raw === '0' || raw === '00') return null;
     if (raw === '930' || raw === '9:30' || raw === '09:30' || raw === '9.5') return 9.5;
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0) return null;
+    if (n >= 1 && n <= 7) return n + 12;
     return n;
+  };
+
+  /** Jornada completa estándar → descuenta almuerzo; manual/acortada → no. */
+  const esJornadaCompleta = (amStr, pmStr, esSabado = false, empId = null) => {
+    const am = parseAm(amStr);
+    const pm = parsePm(pmStr);
+    if (am === null || pm === null) return false;
+    if (esSabado && empId && usaEntradaSabadoNueve(empId)) {
+      return am === 9 && pm === 17;
+    }
+    if (esSabado) return am === 9.5 && pm === 17;
+    return (am === 9 && pm === 18) || (am === 10 && pm === 18)
+        || (am === 9 && pm === 17) || (am === 10 && pm === 17);
   };
 
   /**
@@ -58,7 +75,9 @@
     const pm = parsePm(pmStr);
     if (am === null || pm === null) return 0;
     if (pm <= am) return 0;
-    const almuerzo = horasAlmuerzoParaDia(esSabado, empId);
+    const almuerzo = esJornadaCompleta(amStr, pmStr, esSabado, empId)
+      ? horasAlmuerzoParaDia(esSabado, empId)
+      : 0;
     return Math.max(0, Math.round((pm - am - almuerzo) * 2) / 2);
   };
 
@@ -270,6 +289,7 @@
   const ENGINE_HOURS = {
     parseAm,
     parsePm,
+    esJornadaCompleta,
     computeDailyHours,
     horasAlmuerzoParaDia,
     getDisplayedHours,

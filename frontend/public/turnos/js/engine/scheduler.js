@@ -31,6 +31,7 @@
     GRUPO_MENSAJEROS, GRUPO_FIJO,
     DUO_BRAYAN_MAURICIO,
     DUO_SANTIAGO_MIGUEL,
+    DUO_JESUS_BRANDON,
     IDS_FIJO, IDS_MENSAJEROS,
     GRUPOS_TURNO,
     usaEntradaSabadoNueve,
@@ -47,12 +48,14 @@
 
   const {
     applyPatronTrioMes,
+    applyLunesMartesMensajeroDiez,
     enforceTrioOneTenOneFive,
+    enforceTrioLunesNormal,
   } = window.ENGINE_RULES_MESSENGERS;
 
   const { applyPatronDuosMes } = window.ENGINE_RULES_DUOS;
 
-  const { enforceJhonny } = window.ENGINE_RULES_JOHNNY;
+  const { enforceJhonny, enforceCristian } = window.ENGINE_RULES_JOHNNY;
 
   const {
     capWeeklyTo44,
@@ -146,10 +149,24 @@
 
   /** Paso 8: dúos de turno sin am=10 ni pm=5 en lunes/martes-post-festivo. */
   const step_duosSinAjusteLunesMar = (state, meta) => {
-    const idsDuos = [...DUO_SANTIAGO_MIGUEL, ...DUO_BRAYAN_MAURICIO];
+    const idsDuos = [
+      ...DUO_SANTIAGO_MIGUEL,
+      ...DUO_JESUS_BRANDON,
+      ...DUO_BRAYAN_MAURICIO,
+    ];
     meta.days.forEach((d) => {
       if (d.noLaborable || !esDiaTodosNueveSeis(d, meta.days)) return;
       idsDuos.forEach(id => putCell(state, id, d.day, '9', '6'));
+    });
+  };
+
+  /** Juan Girón siempre fijo 9/6 (lun–vie) y 9:30/5 sáb. */
+  const step_enforceJuanFijo = (state, meta) => {
+    const id = 'juan_giron';
+    meta.days.forEach((d) => {
+      if (d.noLaborable) return;
+      const sab = amPmSabadoBase(id);
+      putCell(state, id, d.day, d.esSabado ? sab.am : '9', d.esSabado ? sab.pm : '6');
     });
   };
 
@@ -222,23 +239,30 @@
     step_rellenoBase(state, meta);              // 1
     step_todosNueveSeis(state, meta);           // 2
     step_patronTrio(state, meta, colMap);       // 3
+    applyLunesMartesMensajeroDiez(state, meta); // 3b — lunes/martes-post: 1 mensajero am=10
     step_sabadoPmCinco(state, meta);            // 4
     step_normalizeSabadoEntrada(state, meta); // 4b
     step_fixDiezCinco(state, meta);             // 5
     capWeeklyTo44(state, meta, null);           // 6
     enforceTrioOneTenOneFive(state, meta);      // 7
+    enforceTrioLunesNormal(state, meta);        // 7b
     step_duosSinAjusteLunesMar(state, meta);    // 8
-    applyPatronDuosMes(state, meta, 1);         // 8b — dúos alternan 10 / 5 por semana
+    applyPatronDuosMes(state, meta, 1);         // 8b
+    step_enforceJuanFijo(state, meta);          // 8c
     capWeeklyTo44(state, meta, null);           // 9
     squeezeGrupoB(state, meta, null);           // 10
     enforceTrioOneTenOneFive(state, meta);      // 11
     liftWeeklyTo44(state, meta, null, null);    // 12
     applyPatronDuosMes(state, meta, 1);           // 13 — restaura alternancia dúos
     applyPatronTrioMes(state, meta, null, 1);    // 13b — restaura alternancia trío
+    applyLunesMartesMensajeroDiez(state, meta);  // 13c — lunes/martes-post mensajero
     enforceTrioOneTenOneFive(state, meta);      // 14
+    enforceTrioLunesNormal(state, meta);        // 14b
+    step_enforceJuanFijo(state, meta);          // 14c
     step_enforceGrupoFijo(state, meta);         // 15
     capFijosTo44(state, meta);                  // 16
     enforceJhonny(state, meta, null);           // 17
+    enforceCristian(state, meta, null);         // 17b
     liftJhonny(state, meta, monthKey, null);      // 18
     capJhonnyTo44(state, meta, null);           // 19
     forceWithinCeiling(state, meta, null);      // 20
@@ -322,6 +346,7 @@
       capWeeklyTo44(state, meta, repairFromDay);
       enforceTrioOneTenOneFive(state, meta, repairFromDay);
       enforceJhonny(state, meta, repairFromDay);
+      enforceCristian(state, meta, repairFromDay);
       liftJhonny(state, meta, monthKey, repairFromDay);
       capJhonnyTo44(state, meta, repairFromDay);
       capFijosTo44(state, meta, repairFromDay);

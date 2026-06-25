@@ -1,6 +1,6 @@
 /**
  * rules-duos.js
- * Dúos Santiago/Miguel y Brayan Yate/Mauricio:
+ * Dúos Santiago/Miguel, Jesús/Brandon y Brayan Yate/Mauricio:
  *   - Lun–vie: por día exactamente 1 am=10 y 1 pm=5 en la pareja.
  *   - Semanas alternas: quien entró a las 10 una semana, sale a las 5 la siguiente (mismo día).
  *   - Sábado: ambos 9:30/5.
@@ -8,10 +8,15 @@
 (function () {
   'use strict';
 
-  const { DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO, CFG } = window.ENGINE_CONSTANTS;
+  const {
+    DUO_SANTIAGO_MIGUEL,
+    DUO_JESUS_BRANDON,
+    DUO_BRAYAN_MAURICIO,
+    CFG,
+  } = window.ENGINE_CONSTANTS;
   const { buildWeekChunks, esDiaTodosNueveSeis } = window.ENGINE_CALENDAR;
 
-  const DUOS = [DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO];
+  const DUOS = [DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO];
 
   /** Rol lun–vie: T=10/6, F=9/5, N=9/6. Fila 0 / fila 1 se intercambian cada semana impar. */
   const PATRON_COLS = [

@@ -4,8 +4,8 @@
  *   - Patrón semanal 44h (matriz 3×6: lun–sáb)
  *   - Máx 1 am=10 y máx 1 pm=5 por día entre los tres
  *   - Almuerzos escalonados: quien entra 10 → 2:00; los otros → 12:00 y 1:00 (hash)
- *   - Lunes laborable: solo 1 puede tener ajuste
- *   - Martes post-festivo: hasta 1×am10 y 1×pm5
+ *   - Lunes laborable: 1 mensajero entra 10 (rota semanal); nadie sale 5
+ *   - Martes post-festivo: 1 mensajero entra 10; resto 9/6
  *   - Sábado: todos 9/5
  */
 (function () {
@@ -175,20 +175,44 @@
     });
   };
 
-  // ─── ENFORCE: LUNES LABORABLE NORMAL ─────────────────────────────────────────
+  // ─── ENFORCE: LUNES / MARTES POST-FESTIVO ─────────────────────────────────────
 
   /**
-   * Lunes laborable (no festivo): máximo UN mensajero con ajuste.
+   * Lunes laborable: 1 mensajero am=10 (rota semanal); resto 9/6; nadie pm=5.
+   * Martes post-festivo: igual (1 mensajero am=10).
+   */
+  const applyLunesMartesMensajeroDiez = (state, meta, fromDay = 1) => {
+    const chunks = buildWeekChunks(meta);
+    chunks.forEach((chunk, weekIdx) => {
+      const pickId = GRUPO_MENSAJEROS[weekIdx % GRUPO_MENSAJEROS.length];
+      chunk.forEach((d) => {
+        if (d.day < fromDay || d.noLaborable) return;
+        const aplica = esLunesLaborable(d) || esMartesPostFestivo(d, meta.days);
+        if (!aplica) return;
+        GRUPO_MENSAJEROS.forEach((id) => {
+          if (id === pickId) putCell(state, id, d.day, '10', '6');
+          else putCell(state, id, d.day, '9', '6');
+        });
+      });
+    });
+  };
+
+  /**
+   * Lunes/martes-post-festivo: máximo UN mensajero con am=10; nadie con pm=5.
    */
   const enforceTrioLunesNormal = (state, meta) => {
     meta.days.forEach((d) => {
-      if (!esLunesLaborable(d)) return;
-      const conAjuste = GRUPO_MENSAJEROS.filter(id => {
+      const aplica = esLunesLaborable(d) || esMartesPostFestivo(d, meta.days);
+      if (!aplica) return;
+
+      GRUPO_MENSAJEROS.forEach((id) => {
         const c = state.cells[id]?.[d.day];
-        return normAm(c) === '10' || normPm(c) === '5';
+        if (normPm(c) === '5') putCell(state, id, d.day, normAm(c) || '9', '6');
       });
-      if (conAjuste.length > 1) {
-        conAjuste.slice(1).forEach(id => putCell(state, id, d.day, '9', '6'));
+
+      const conDiez = GRUPO_MENSAJEROS.filter(id => normAm(state.cells[id]?.[d.day]) === '10');
+      if (conDiez.length > 1) {
+        conDiez.slice(1).forEach(id => putCell(state, id, d.day, '9', '6'));
       }
     });
   };
@@ -338,6 +362,7 @@
     applyPatronTrioWeek,
     applyPatronTrioDia,
     applyPatronTrioMes,
+    applyLunesMartesMensajeroDiez,
     enforceTrioOneTenOneFive,
     enforceTrioLunesNormal,
     getLunchTrio,

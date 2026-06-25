@@ -1,8 +1,6 @@
 /**
  * constants.js — Fuente única de verdad.
  * IDs alineados con Firestore y DOM existentes (sin migración).
- * Brayan Yate = el "Camilo" del spec operativo (dúo con Mauricio).
- * David Sánchez = ajustes como Cristian, almuerzo fijo 1:00, sin cobertura.
  */
 (function () {
   'use strict';
@@ -11,18 +9,18 @@
 
   const CFG = {
     HORAS_ALMUERZO:        1,
-    HORAS_ALMUERZO_SAB:    0.5,  // sábado: 30 min (solo sábados)
+    HORAS_ALMUERZO_SAB:    0.5,
     MINUTOS_ALMUERZO_SAB:  30,
-    HORAS_TOPE_SEMANA:     44,   // objetivo no-fijos
-    HORAS_SEMANA_NORMAL:   47,   // fijos (lun-vie 8h + sáb 7h)
-    HORAS_SEMANA_FESTIVO:  46,   // fijos con lunes festivo
-    HORAS_FESTIVO_SEMANA:  7,    // festivo entre semana cuenta 7h en Σ
-    HORAS_SAB:             7,    // sábado efectivas
-    HORAS_DIA_NORMAL:      8,    // lun-vie normal
-    AJUSTES_SEMANA_NORMAL: 3,    // no-fijos semana normal
-    AJUSTES_SEMANA_FESTIVO:2,    // no-fijos semana con lunes festivo
+    HORAS_TOPE_SEMANA:     44,
+    HORAS_SEMANA_NORMAL:   47,
+    HORAS_SEMANA_FESTIVO:  46,
+    HORAS_FESTIVO_SEMANA:  7,
+    HORAS_SAB:             7,
+    HORAS_DIA_NORMAL:      8,
+    AJUSTES_SEMANA_NORMAL: 3,
+    AJUSTES_SEMANA_FESTIVO:2,
     AM_NORMAL:  '9',
-    AM_SABADO:  '930',           // entrada sábado 9:30 (celda am)
+    AM_SABADO:  '930',
     AM_AJUSTE:  '10',
     PM_NORMAL:  '6',
     PM_AJUSTE:  '5',
@@ -62,32 +60,20 @@
 
   // ─── EMPLEADOS ────────────────────────────────────────────────────────────────
 
-  /**
-   * Lista maestra. Orden = filas en la planilla, agrupadas por equipo (color).
-   * type: 'fijo' | 'no-fijo'
-   *
-   * IDs idénticos a Firestore y atributos data-cell del DOM actual.
-   */
   const EMPLEADOS = [
-    // Team 1 — mensajeros (azul)
     { id: 'harold_paipa',      name: 'HAROLD PAIPA',      type: 'no-fijo' },
     { id: 'diego_lozano',      name: 'DIEGO LOZANO',      type: 'no-fijo' },
     { id: 'dilan_toro',        name: 'DILAN TORO',         type: 'no-fijo' },
-    // Team 2 — Santiago / Miguel / Juan (morado)
     { id: 'santiago_guarnizo', name: 'SANTIAGO GUARNIZO', type: 'no-fijo' },
     { id: 'miguel_fonseca',    name: 'MIGUEL FONSECA',    type: 'no-fijo' },
     { id: 'juan_giron',        name: 'JUAN GIRÓN',        type: 'fijo'    },
-    // Team 3 — Brayan R / Brandon / Jesús (cyan)
     { id: 'brayan_ramirez',    name: 'BRAYAN RAMÍREZ',    type: 'fijo'    },
-    { id: 'brandon',           name: 'BRANDON',           type: 'fijo'    },
+    { id: 'brandon',           name: 'BRANDON',           type: 'no-fijo' },
     { id: 'jesus_perez',       name: 'JESÚS PÉREZ',       type: 'no-fijo' },
-    // Team 4 — Jhonny / Cristian (amarillo)
     { id: 'jhonny_rodriguez',  name: 'JHONNY RODRÍGUEZ',  type: 'no-fijo' },
     { id: 'cristian_uribe',    name: 'CRISTIAN URIBE',    type: 'no-fijo' },
-    // Team 5 — Brayan Yate / Mauricio (rosa)
     { id: 'brayan_yate',       name: 'BRAYAN YATE',       type: 'no-fijo' },
     { id: 'mauricio_bautista', name: 'MAURICIO BAUTISTA', type: 'no-fijo' },
-    // Sin equipo de color
     { id: 'jhon_lozano',       name: 'JHON LOZANO',       type: 'fijo'    },
     { id: 'david_sanchez',     name: 'DAVID SÁNCHEZ',     type: 'no-fijo' },
     { id: 'jonathan_sanchez',  name: 'JONATHAN SÁNCHEZ',  type: 'fijo'    },
@@ -95,17 +81,14 @@
 
   // ─── GRUPOS / EQUIPOS ─────────────────────────────────────────────────────────
 
-  /** Trío mensajería: rotación turnos, almuerzos escalonados 12/1/2, 44h/semana. */
   const GRUPO_MENSAJEROS = ['harold_paipa', 'diego_lozano', 'dilan_toro'];
 
-  /** Equipos visuales en la planilla (colores de fila). Team 1 = mensajeros. */
   const TEAM_MENSAJEROS = GRUPO_MENSAJEROS;
   const TEAM_2 = ['santiago_guarnizo', 'miguel_fonseca', 'juan_giron'];
   const TEAM_3 = ['brayan_ramirez', 'brandon', 'jesus_perez'];
   const TEAM_4 = ['jhonny_rodriguez', 'cristian_uribe'];
   const TEAM_5 = ['brayan_yate', 'mauricio_bautista'];
 
-  /** Clase CSS de equipo por empleado (planilla turnos / almuerzos). */
   const teamClassForEmpId = (empId) => {
     if (TEAM_MENSAJEROS.includes(empId)) return 'team-mensajeros';
     if (TEAM_2.includes(empId)) return 'team-2';
@@ -115,90 +98,67 @@
     return '';
   };
 
-  /**
-   * Mapa id → índice de fila en la matriz PATRON_TRIO.
-   * Harold=0, Dilan=1, Diego=2 (mismo orden que el código original).
-   */
   const TRIO_ROW_BY_ID = {
     harold_paipa: 0,
     dilan_toro:   1,
     diego_lozano: 2,
   };
 
-  /** Dúo despacho: almuerzos alternos, Jesús cubre mensajería si hay ausente. */
-  const DUO_DESPACHO = ['juan_giron', 'jesus_perez'];
-
-  /**
-   * Dúo Santiago / Miguel:
-   * - No pueden tener ambos am=10 ni ambos pm=5 el mismo día.
-   * - Almuerzos 12/1 según quién entra a las 10; John cubre a las 2.
-   */
+  /** Dúo turno Santiago / Miguel (Juan fijo 9/6 aparte). */
   const DUO_SANTIAGO_MIGUEL = ['santiago_guarnizo', 'miguel_fonseca'];
 
-  /**
-   * Dúo Brayan Yate / Mauricio:
-   * - Mismas restricciones cruzadas de ajuste que Santiago/Miguel.
-   * - Almuerzos fijos: Mauricio 1:00, Brayan Yate 3:00.
-   * - Los ajustes no modifican sus almuerzos.
-   */
+  /** Trío almuerzo Santiago / Miguel / Juan. */
+  const TRIO_SANTIAGO_MIGUEL_JUAN = ['santiago_guarnizo', 'miguel_fonseca', 'juan_giron'];
+
+  /** Trío despacho: almuerzos 12/1/2 rotativos; Brayan R fijo horario. */
+  const TRIO_DESPACHO = ['brayan_ramirez', 'brandon', 'jesus_perez'];
+
+  /** Dúo turno Jesús / Brandon (mismo patrón S/M). */
+  const DUO_JESUS_BRANDON = ['jesus_perez', 'brandon'];
+
   const DUO_BRAYAN_MAURICIO = ['brayan_yate', 'mauricio_bautista'];
 
-  /**
-   * Dúo cobertura cruzada:
-   * - Johnny pm5 mié-jue-vie obligatorio; nunca am=10.
-   * - Brayan Ramírez: fijo, sin ajuste.
-   * - Si falta uno, Christian cubre al otro durante el almuerzo.
-   */
-  const DUO_JOHNNY_BRAYAN = ['jhonny_rodriguez', 'brayan_ramirez'];
+  /** Pareja Jhonny / Cristian. */
+  const DUO_JHONNY_CRISTIAN = ['jhonny_rodriguez', 'cristian_uribe'];
 
-  /** Fijos: nunca am=10 ni pm=5 lun-vie. Sábado 9:30/5 (excepto Jonathan → 9/5). */
-  const GRUPO_FIJO = ['jhon_lozano', 'juan_giron', 'brayan_ramirez', 'brandon', 'jonathan_sanchez'];
+  /** Fijos horario: 9/6 lun–vie, 9:30/5 sáb (Jonathan/David → 9/5 sáb). */
+  const GRUPO_FIJO = ['jhon_lozano', 'juan_giron', 'brayan_ramirez', 'jonathan_sanchez'];
 
-  /** Sábado: entrada 9:00 (no 9:30) y almuerzo de 1 h (no 30 min). */
   const EXCEPCION_SABADO_ENTRADA_9 = ['jonathan_sanchez', 'david_sanchez'];
   const IDS_SABADO_ENTRADA_9 = new Set(EXCEPCION_SABADO_ENTRADA_9);
 
   const usaEntradaSabadoNueve = (empId) => IDS_SABADO_ENTRADA_9.has(empId);
   const usaAlmuerzoHoraSabado = (empId) => IDS_SABADO_ENTRADA_9.has(empId);
 
-  /** No-fijos: deben llegar a exactamente 44h/semana. */
   const GRUPO_NO_FIJO = EMPLEADOS.filter(e => e.type === 'no-fijo').map(e => e.id);
 
-  // Sets para O(1) lookup
   const IDS_FIJO       = new Set(GRUPO_FIJO);
   const IDS_MENSAJEROS = new Set(GRUPO_MENSAJEROS);
   const IDS_NO_FIJO    = new Set(GRUPO_NO_FIJO);
 
-  // Todos los no-fijos que van en grupos de turno (afectan enforces cruzados)
-  const GRUPOS_TURNO = [GRUPO_MENSAJEROS, DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO];
-  const IDS_TURNO    = new Set([...GRUPO_MENSAJEROS, ...DUO_SANTIAGO_MIGUEL, ...DUO_BRAYAN_MAURICIO]);
+  const GRUPOS_TURNO = [
+    GRUPO_MENSAJEROS,
+    DUO_SANTIAGO_MIGUEL,
+    DUO_JESUS_BRANDON,
+    DUO_BRAYAN_MAURICIO,
+  ];
+  const IDS_TURNO = new Set([
+    ...GRUPO_MENSAJEROS,
+    ...DUO_SANTIAGO_MIGUEL,
+    ...DUO_JESUS_BRANDON,
+    ...DUO_BRAYAN_MAURICIO,
+  ]);
 
   // ─── ALMUERZOS FIJOS ─────────────────────────────────────────────────────────
 
-  /**
-   * Empleados con horario de almuerzo invariable.
-   * Los que no están aquí tienen lógica propia en lunch-engine.js.
-   */
   const ALMUERZO_FIJO = {
-    'jhon_lozano':       '2:00',   // fijo
-    'brayan_ramirez':    '12:00',  // fijo (cubre a Johnny mientras almuerza)
-    'brandon':           '1:00',   // fijo
-    'jonathan_sanchez':  '1:00',   // fijo
-    'jhonny_rodriguez':  '1:00',   // equipo Johnny/Brayan (fijo)
-    'mauricio_bautista': '1:00',   // equipo Brayan Yate/Mauricio (fijo)
-    'brayan_yate':       '3:00',   // equipo Brayan Yate/Mauricio (fijo)
-    'david_sanchez':     '1:00',   // independiente, almuerzo fijo 1:00
+    'jhon_lozano':       '3:00',
+    'jonathan_sanchez':  '1:00',
+    'mauricio_bautista': '1:00',
+    'brayan_yate':       '3:00',
+    'david_sanchez':     '1:00',
   };
 
-  // ─── RESTRICCIONES DE AJUSTE POR EMPLEADO ────────────────────────────────────
-
-  /**
-   * puedeEntrarDiez: puede tener am=10 (ajuste entrada).
-   * puedeSalirCinco: puede tener pm=5 (ajuste salida).
-   *
-   * Johnny: nunca am=10, pero sí pm=5 (mié-jue-vie obligatorio).
-   * David Sánchez: igual que Cristian — ajustes libres en ambas direcciones.
-   */
   const RESTRICCIONES_AJUSTE = {
     'harold_paipa':      { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'diego_lozano':      { puedeEntrarDiez: true,  puedeSalirCinco: true  },
@@ -207,29 +167,21 @@
     'miguel_fonseca':    { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'cristian_uribe':    { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'jesus_perez':       { puedeEntrarDiez: true,  puedeSalirCinco: true  },
-    'jhonny_rodriguez':  { puedeEntrarDiez: false, puedeSalirCinco: true  },
+    'brandon':           { puedeEntrarDiez: true,  puedeSalirCinco: true  },
+    'jhonny_rodriguez':  { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'brayan_yate':       { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'mauricio_bautista': { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'david_sanchez':     { puedeEntrarDiez: true,  puedeSalirCinco: true  },
-    // Fijos — sin ajuste
     'jhon_lozano':       { puedeEntrarDiez: false, puedeSalirCinco: false },
     'juan_giron':        { puedeEntrarDiez: false, puedeSalirCinco: false },
     'brayan_ramirez':    { puedeEntrarDiez: false, puedeSalirCinco: false },
-    'brandon':           { puedeEntrarDiez: false, puedeSalirCinco: false },
     'jonathan_sanchez':  { puedeEntrarDiez: false, puedeSalirCinco: false },
   };
 
-  // ─── ALMUERZOS PERMITIDOS POR GRUPO ──────────────────────────────────────────
-
   const ALMUERZOS_MENSAJEROS      = ['12:00', '1:00', '2:00'];
-  /** Sábado: franjas de 30 min (trío mensajeros). */
   const ALMUERZOS_SABADO          = ['12:00-12:30', '12:30-1:00', '1:00-1:30'];
-  const ALMUERZOS_DESPACHO        = ['12:00', '1:00'];
-  const ALMUERZOS_SANTIAGO_MIGUEL = ['12:00', '1:00'];
+  const ALMUERZOS_TRES_FRANJAS    = ['12:00', '1:00', '2:00'];
 
-  // ─── FORMATO NOMBRE (columna empleado) ────────────────────────────────────────
-
-  /** Nombre + apellido(s) en HTML para columna fija (móvil: apellido debajo). */
   const formatEmpNameHtml = (fullName) => {
     const raw = String(fullName || '').trim();
     const parts = raw.split(/\s+/).filter(Boolean);
@@ -240,8 +192,6 @@
     const apellido = parts.slice(1).join(' ');
     return `<span class="emp-name-stack" aria-label="${raw}"><span class="emp-nombre">${nombre}</span><span class="emp-apellido">${apellido}</span></span>`;
   };
-
-  // ─── EXPORT ───────────────────────────────────────────────────────────────────
 
   const ENGINE_CONSTANTS = {
     CFG,
@@ -255,10 +205,12 @@
     TEAM_5,
     teamClassForEmpId,
     TRIO_ROW_BY_ID,
-    DUO_DESPACHO,
+    TRIO_SANTIAGO_MIGUEL_JUAN,
+    TRIO_DESPACHO,
     DUO_SANTIAGO_MIGUEL,
+    DUO_JESUS_BRANDON,
     DUO_BRAYAN_MAURICIO,
-    DUO_JOHNNY_BRAYAN,
+    DUO_JHONNY_CRISTIAN,
     GRUPO_FIJO,
     GRUPO_NO_FIJO,
     IDS_FIJO,
@@ -270,8 +222,7 @@
     RESTRICCIONES_AJUSTE,
     ALMUERZOS_MENSAJEROS,
     ALMUERZOS_SABADO,
-    ALMUERZOS_DESPACHO,
-    ALMUERZOS_SANTIAGO_MIGUEL,
+    ALMUERZOS_TRES_FRANJAS,
     EXCEPCION_SABADO_ENTRADA_9,
     IDS_SABADO_ENTRADA_9,
     usaEntradaSabadoNueve,

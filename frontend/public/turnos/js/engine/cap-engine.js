@@ -16,7 +16,7 @@
   const {
     CFG, EMPLEADOS,
     GRUPO_MENSAJEROS, GRUPO_FIJO,
-    DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO,
+    DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO,
     IDS_FIJO, IDS_MENSAJEROS,
   } = window.ENGINE_CONSTANTS;
 
@@ -42,7 +42,7 @@
   const esDiezSeis   = (c) => c && normAm(c) === '10' && normPm(c) === '6';
   const esNueveCinco = (c) => c && normAm(c) === '9'  && normPm(c) === '5';
 
-  const DUOS_RESTRICCION = [DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO];
+  const DUOS_RESTRICCION = [DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO];
 
   const partnerDuo = (id) => {
     for (const duo of DUOS_RESTRICCION) {
@@ -117,13 +117,13 @@
 
   /**
    * Cap post-lift para Jhonny.
-   * Baja en orden: martes → miércoles (sin festivo) → lunes.
+   * Baja lun/mar 9/6→9/5; mié 9/6→9/5 solo si no hubo lunes festivo.
    */
   const capJhonnyTo44 = (state, meta, minDay) => {
     const id     = 'jhonny_rodriguez';
     const chunks = buildWeekChunks(meta);
     const dayOk  = (d) => minDay == null || d.day >= minDay;
-    const { hayFestivoLunesMartesOMiercolesEnSemana } = window.ENGINE_RULES_JOHNNY;
+    const { lunesFestivoEnSemana } = window.ENGINE_RULES_JOHNNY;
 
     chunks.forEach((chunk) => {
       let guard = 0;
@@ -131,18 +131,18 @@
         guard++;
         let bajado = false;
 
-        const dm = chunk.find(d => dayOk(d) && d.dow === 2 && !d.noLaborable);
-        if (dm && esNueveSeis(state.cells[id]?.[dm.day])) {
-          putCell(state, id, dm.day, '9', '5'); bajado = true; continue;
+        for (const dow of [2, 1]) {
+          const dm = chunk.find(d => dayOk(d) && d.dow === dow && !d.noLaborable);
+          if (dm && esNueveSeis(state.cells[id]?.[dm.day])) {
+            putCell(state, id, dm.day, '9', '5'); bajado = true; break;
+          }
         }
+        if (bajado) continue;
+
         const dw = chunk.find(d => dayOk(d) && d.dow === 3 && !d.noLaborable);
-        if (dw && !hayFestivoLunesMartesOMiercolesEnSemana(meta, dw) &&
+        if (dw && !lunesFestivoEnSemana(meta, dw) &&
             esNueveSeis(state.cells[id]?.[dw.day])) {
-          putCell(state, id, dw.day, '9', '5'); bajado = true; continue;
-        }
-        const dl = chunk.find(d => dayOk(d) && d.dow === 1 && !d.noLaborable);
-        if (dl && esNueveSeis(state.cells[id]?.[dl.day])) {
-          putCell(state, id, dl.day, '9', '5'); bajado = true; continue;
+          putCell(state, id, dw.day, '9', '5'); bajado = true;
         }
 
         if (!bajado) break;
@@ -216,19 +216,18 @@
   };
 
   /**
-   * Sube Jhonny a 44h/semana en días permitidos: mar → mié (con festivo) → lun.
-   * No toca jue/vie (siempre pm5) ni sábado.
+   * Sube Jhonny a 44h en lun/mar (9/5→9/6) y mié si lunes festivo (9/5→9/6).
    */
   const liftJhonny = (state, meta, monthKey, minDay) => {
     const id     = 'jhonny_rodriguez';
     const chunks = buildWeekChunks(meta);
     const dayOk  = (d) => minDay == null || d.day >= minDay;
-    const { hayFestivoLunesMartesOMiercolesEnSemana } = window.ENGINE_RULES_JOHNNY;
+    const { lunesFestivoEnSemana } = window.ENGINE_RULES_JOHNNY;
 
     const trySubir = (d) => {
       if (!dayOk(d)) return false;
       const c = state.cells[id]?.[d.day];
-      if (esNueveCinco(c) || esDiezSeis(c)) {
+      if (esNueveCinco(c)) {
         putCell(state, id, d.day, '9', '6');
         return true;
       }
@@ -238,16 +237,15 @@
     chunks.forEach((chunk) => {
       if (sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
 
-      const dm = chunk.find(d => dayOk(d) && d.dow === 2 && !d.noLaborable);
-      if (dm && trySubir(dm) && sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
-
-      const dw = chunk.find(d => dayOk(d) && d.dow === 3 && !d.noLaborable);
-      if (dw && hayFestivoLunesMartesOMiercolesEnSemana(meta, dw)) {
-        if (trySubir(dw) && sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
+      for (const dow of [1, 2]) {
+        const d = chunk.find(x => dayOk(x) && x.dow === dow && !x.noLaborable);
+        if (d && trySubir(d) && sumWeekHours(id, chunk, state) >= CFG.HORAS_TOPE_SEMANA) return;
       }
 
-      const dl = chunk.find(d => dayOk(d) && d.dow === 1 && !d.noLaborable);
-      if (dl) trySubir(dl);
+      const dw = chunk.find(d => dayOk(d) && d.dow === 3 && !d.noLaborable);
+      if (dw && lunesFestivoEnSemana(meta, dw)) {
+        trySubir(dw);
+      }
     });
   };
 

@@ -1,10 +1,7 @@
 /**
- * validator.js
- * Valida el estado generado y reporta violaciones de reglas.
- * No muta el estado — solo lectura.
+ * validator.js — Valida el estado generado (solo lectura).
  *
- * Uso en consola del navegador:
- *   ENGINE_VALIDATOR.printValidation(state, '2026-06');
+ * Uso: ENGINE_VALIDATOR.printValidation(state, '2026-06');
  */
 (function () {
   'use strict';
@@ -12,20 +9,21 @@
   const {
     CFG, EMPLEADOS,
     GRUPO_MENSAJEROS, GRUPO_FIJO,
-    DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO,
+    DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO,
+    DUO_JHONNY_CRISTIAN,
     IDS_FIJO,
     usaEntradaSabadoNueve,
   } = window.ENGINE_CONSTANTS;
 
-  const { getMonthMeta, buildWeekChunks } = window.ENGINE_CALENDAR;
-  const { sumWeekHours, normAm, normPm }  = window.ENGINE_HOURS;
+  const {
+    getMonthMeta,
+    buildWeekChunks,
+    esLunesLaborable,
+    esMartesPostFestivo,
+  } = window.ENGINE_CALENDAR;
+  const { sumWeekHours, normAm, normPm } = window.ENGINE_HOURS;
+  const { lunesFestivoEnSemana } = window.ENGINE_RULES_JOHNNY;
 
-  /**
-   * Ejecuta todas las validaciones y retorna array de errores.
-   * @param {object} state
-   * @param {string} monthKey
-   * @returns {{ rule, empId, day, chunk, detail }[]}
-   */
   const validate = (state, monthKey) => {
     const errors = [];
     const meta   = getMonthMeta(monthKey);
@@ -34,7 +32,6 @@
     const push = (rule, empId, detail, day, chunk) =>
       errors.push({ rule, empId, day, chunk, detail });
 
-    // ── R1: no-fijos exactamente 44h por semana ───────────────────────────────
     EMPLEADOS.forEach(({ id }) => {
       if (IDS_FIJO.has(id)) return;
       chunks.forEach((chunk, ci) => {
@@ -47,20 +44,27 @@
       });
     });
 
-    // ── R2: trío — máx 1 am=10 y máx 1 pm=5 por día entre semana ─────────────
     meta.days.forEach((d) => {
       if (d.noLaborable || d.dow === 6) return;
       const conDiez  = GRUPO_MENSAJEROS.filter(id => normAm(state.cells[id]?.[d.day]) === '10');
       const conCinco = GRUPO_MENSAJEROS.filter(id => normPm(state.cells[id]?.[d.day]) === '5');
       if (conDiez.length > 1)
         push('TRIO_MAX_UNO_DIEZ', conDiez.join(', '),
-          `Día ${d.day} (${d.dowLabel}): ${conDiez.length} mensajeros con am=10`, d.day);
+          `Día ${d.day}: ${conDiez.length} mensajeros con am=10`, d.day);
       if (conCinco.length > 1)
         push('TRIO_MAX_UNO_CINCO', conCinco.join(', '),
-          `Día ${d.day} (${d.dowLabel}): ${conCinco.length} mensajeros con pm=5`, d.day);
+          `Día ${d.day}: ${conCinco.length} mensajeros con pm=5`, d.day);
+
+      if (esLunesLaborable(d) || esMartesPostFestivo(d, meta.days)) {
+        if (conDiez.length === 0)
+          push('LUN_MAR_SIN_DIEZ', 'mensajeros',
+            `Día ${d.day}: falta 1 mensajero con am=10`, d.day);
+        if (conCinco.length > 0)
+          push('LUN_MAR_PM5', conCinco.join(', '),
+            `Día ${d.day}: mensajero(s) con pm=5 (prohibido)`, d.day);
+      }
     });
 
-    // ── R3: sábado laborable — 9:30/5 (Jonathan y David → 9/5) ───────────────
     meta.days.forEach((d) => {
       if (d.noLaborable || d.dow !== 6) return;
       EMPLEADOS.forEach(({ id }) => {
@@ -72,18 +76,16 @@
       });
     });
 
-    // ── R4: nadie con 10+5 entre semana (lun-vie) ─────────────────────────────
     meta.days.forEach((d) => {
       if (d.noLaborable || d.esSabado) return;
       EMPLEADOS.forEach(({ id }) => {
         const c = state.cells[id]?.[d.day];
         if (normAm(c) === '10' && normPm(c) === '5')
           push('DIEZ_CINCO_PROHIBIDO', id,
-            `Día ${d.day} (${d.dowLabel}): am=10 + pm=5 (combinación prohibida)`, d.day);
+            `Día ${d.day}: am=10 + pm=5`, d.day);
       });
     });
 
-    // ── R5: fijos — nunca am=10 ni pm=5 lun-vie ───────────────────────────────
     meta.days.forEach((d) => {
       if (d.noLaborable || d.esSabado) return;
       GRUPO_FIJO.forEach(id => {
@@ -95,27 +97,38 @@
       });
     });
 
-    // ── R6: Johnny — nunca am=10 ──────────────────────────────────────────────
     meta.days.forEach((d) => {
-      if (d.noLaborable) return;
+      if (d.noLaborable || d.esSabado) return;
       const c = state.cells['jhonny_rodriguez']?.[d.day];
-      if (normAm(c) === '10')
-        push('JOHNNY_NO_DIEZ', 'jhonny_rodriguez',
-          `Día ${d.day}: Jhonny con am=10 (prohibido)`, d.day);
+      if (d.dow === 4 && normAm(c) !== '10')
+        push('JHONNY_JUE_DIEZ', 'jhonny_rodriguez',
+          `Día ${d.day}: Jhonny am=${normAm(c)} (esperado 10)`, d.day);
+      if (d.dow !== 4 && normAm(c) === '10')
+        push('JHONNY_SOLO_JUE_DIEZ', 'jhonny_rodriguez',
+          `Día ${d.day}: Jhonny am=10 fuera de jueves`, d.day);
+      if (d.dow === 5 && normPm(c) !== '5')
+        push('JHONNY_VIE_PM5', 'jhonny_rodriguez',
+          `Día ${d.day}: Jhonny pm=${normPm(c)} (esperado 5)`, d.day);
+      if (d.dow === 3) {
+        const esperado = lunesFestivoEnSemana(meta, d) ? '6' : '5';
+        if (normPm(c) !== esperado)
+          push('JHONNY_MIE_PM', 'jhonny_rodriguez',
+            `Día ${d.day}: Jhonny pm=${normPm(c)} (esperado ${esperado})`, d.day);
+      }
     });
 
-    // ── R7: Johnny — pm=5 en jue y vie laborables ────────────────────────────
     meta.days.forEach((d) => {
-      if (d.noLaborable) return;
-      if (d.dow !== 4 && d.dow !== 5) return; // solo jue(4) y vie(5)
-      const c = state.cells['jhonny_rodriguez']?.[d.day];
-      if (normPm(c) !== '5')
-        push('JOHNNY_JUE_VIE_PM5', 'jhonny_rodriguez',
-          `Día ${d.day} (${d.dowLabel}): Jhonny pm=${normPm(c)} (esperado 5)`, d.day);
+      if (d.noLaborable || d.esSabado) return;
+      const c = state.cells['cristian_uribe']?.[d.day];
+      if (d.dow === 4 && normAm(c) === '10')
+        push('CRISTIAN_JUE_NO_DIEZ', 'cristian_uribe',
+          `Día ${d.day}: Cristian am=10 (prohibido jueves)`, d.day);
+      if ((d.dow === 3 || d.dow === 5) && normPm(c) === '5')
+        push('CRISTIAN_MIE_VIE_NO_PM5', 'cristian_uribe',
+          `Día ${d.day}: Cristian pm=5 (prohibido mié/vie)`, d.day);
     });
 
-    // ── R8: dúos Santiago/Miguel y Brayan Yate/Mauricio — máx 1×am10 y 1×pm5 ─
-    for (const duo of [DUO_SANTIAGO_MIGUEL, DUO_BRAYAN_MAURICIO]) {
+    for (const duo of [DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO]) {
       meta.days.forEach((d) => {
         if (d.noLaborable || d.esSabado) return;
         const conDiez  = duo.filter(id => normAm(state.cells[id]?.[d.day]) === '10');
@@ -129,33 +142,20 @@
       });
     }
 
-    // ── R9: sábado laborable — nadie con pm=6 ────────────────────────────────
     meta.days.forEach((d) => {
       if (d.noLaborable || !d.esSabado) return;
       EMPLEADOS.forEach(({ id }) => {
         const c = state.cells[id]?.[d.day];
         if (normPm(c) === '6')
-          push('SAB_PM6_PROHIBIDO', id, `Sáb día ${d.day}: pm=6 (debe ser 5)`, d.day);
+          push('SAB_PM6_PROHIBIDO', id, `Sáb día ${d.day}: pm=6`, d.day);
+        if (normAm(c) === '10')
+          push('SAB_NO_DIEZ', id, `Sáb día ${d.day}: am=10`, d.day);
       });
-    });
-
-    // ── R10: David Sánchez — mismas restricciones que Cristian (no fijo) ──────
-    // (sus horas ya se validan en R1 al ser no-fijo)
-    // Verificación adicional: nunca am=10 en sábado
-    meta.days.forEach((d) => {
-      if (d.noLaborable || !d.esSabado) return;
-      const c = state.cells['david_sanchez']?.[d.day];
-      if (normAm(c) === '10')
-        push('DAVID_SAB_NO_DIEZ', 'david_sanchez',
-          `Sáb día ${d.day}: David con am=10 en sábado`, d.day);
     });
 
     return errors;
   };
 
-  /**
-   * Imprime reporte en consola (para desarrollo/debug).
-   */
   const printValidation = (state, monthKey) => {
     const errors = validate(state, monthKey);
     if (errors.length === 0) {
@@ -168,8 +168,6 @@
     return errors;
   };
 
-  const ENGINE_VALIDATOR = { validate, printValidation };
-
-  window.ENGINE_VALIDATOR = ENGINE_VALIDATOR;
+  window.ENGINE_VALIDATOR = { validate, printValidation };
 
 })();
