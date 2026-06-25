@@ -79,6 +79,19 @@
       ? { am: CFG.AM_NORMAL, pm: CFG.PM_SAB }
       : { am: CFG.AM_SABADO, pm: CFG.PM_SAB };
 
+  /** Paso 1b: 9:30 solo es válido en sábado (corrige datos heredados de Firebase). */
+  const step_stripWeekdaySabadoEntrada = (state, meta) => {
+    meta.days.forEach((d) => {
+      if (d.noLaborable || d.esSabado) return;
+      EMPLEADOS.forEach(({ id }) => {
+        const c = state.cells[id]?.[d.day];
+        if (!c || normAm(c) !== CFG.AM_SABADO) return;
+        const pm = normPm(c) || CFG.PM_NORMAL;
+        putCell(state, id, d.day, CFG.AM_NORMAL, pm);
+      });
+    });
+  };
+
   /** Paso 1: rellena celdas vacías con 9/6 lun-vie y 9:30/5 sáb (Jonathan/David 9/5). */
   const step_rellenoBase = (state, meta) => {
     EMPLEADOS.forEach(({ id }) => {
@@ -221,6 +234,7 @@
     forceWithinCeiling(state, meta, minDay);
     enforceCristian(state, meta, minDay);
     capCristianTo44(state, meta, minDay);
+    step_stripWeekdaySabadoEntrada(state, meta);
     step_enforceGrupoFijo(state, meta);
     forceSabadoEntrada930(state, meta);
     finalizeNonFijo44Hours(state, meta, minDay);
@@ -255,6 +269,7 @@
     if (!state.trioAusentePorDia)    state.trioAusentePorDia    = {};
 
     step_rellenoBase(state, meta);              // 1
+    step_stripWeekdaySabadoEntrada(state, meta); // 1b
     step_todosNueveSeis(state, meta);           // 2
     step_patronTrio(state, meta, colMap);       // 3
     applyLunesMartesMensajeroDiez(state, meta); // 3b — lunes/martes-post: 1 mensajero am=10
@@ -400,6 +415,7 @@
     recalcExtras,
     // Pasos individuales (para applyJuneTurnTemplate y tests)
     step_rellenoBase,
+    step_stripWeekdaySabadoEntrada,
     step_todosNueveSeis,
     step_patronTrio,
     step_sabadoPmCinco,

@@ -128,6 +128,9 @@
       if ((d.dow === 3 || d.dow === 5) && normPm(c) === '5')
         push('CRISTIAN_MIE_VIE_NO_PM5', 'cristian_uribe',
           `Día ${d.day}: Cristian pm=5 (prohibido mié/vie)`, d.day);
+      if (normAm(c) === CFG.AM_SABADO)
+        push('CRISTIAN_WEEKDAY_NO_930', 'cristian_uribe',
+          `Día ${d.day}: Cristian am=9:30 (solo válido sábado)`, d.day);
     });
 
     for (const duo of [DUO_SANTIAGO_MIGUEL, DUO_JESUS_BRANDON, DUO_BRAYAN_MAURICIO]) {

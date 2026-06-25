@@ -67,6 +67,10 @@
       let am   = normAm(c) || CFG.AM_NORMAL;
       let pm   = normPm(c) || CFG.PM_NORMAL;
 
+      if (am === CFG.AM_SABADO) {
+        am = CFG.AM_NORMAL;
+      }
+
       if (d.dow === 4 && am === CFG.AM_AJUSTE) {
         am = CFG.AM_NORMAL;
       }
