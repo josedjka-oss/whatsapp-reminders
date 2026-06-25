@@ -86,8 +86,9 @@
   const TEAM_MENSAJEROS = GRUPO_MENSAJEROS;
   const TEAM_2 = ['santiago_guarnizo', 'miguel_fonseca', 'juan_giron'];
   const TEAM_3 = ['brayan_ramirez', 'brandon', 'jesus_perez'];
-  const TEAM_4 = ['jhonny_rodriguez', 'cristian_uribe'];
+  const TEAM_4 = ['jhonny_rodriguez'];
   const TEAM_5 = ['brayan_yate', 'mauricio_bautista'];
+  const TEAM_6 = ['jonathan_sanchez', 'david_sanchez'];
 
   const teamClassForEmpId = (empId) => {
     if (TEAM_MENSAJEROS.includes(empId)) return 'team-mensajeros';
@@ -95,6 +96,7 @@
     if (TEAM_3.includes(empId)) return 'team-3';
     if (TEAM_4.includes(empId)) return 'team-4';
     if (TEAM_5.includes(empId)) return 'team-5';
+    if (TEAM_6.includes(empId)) return 'team-6';
     return '';
   };
 
@@ -118,8 +120,8 @@
 
   const DUO_BRAYAN_MAURICIO = ['brayan_yate', 'mauricio_bautista'];
 
-  /** Pareja Jhonny / Cristian. */
-  const DUO_JHONNY_CRISTIAN = ['jhonny_rodriguez', 'cristian_uribe'];
+  /** Dúo Jonathan / David (equipo 6 — almuerzo sábado y color planilla). */
+  const DUO_JONATHAN_DAVID = ['jonathan_sanchez', 'david_sanchez'];
 
   /** Fijos horario: 9/6 lun–vie, 9:30/5 sáb (Jonathan/David → 9/5 sáb). */
   const GRUPO_FIJO = ['jhon_lozano', 'juan_giron', 'brayan_ramirez', 'jonathan_sanchez'];
@@ -209,6 +211,7 @@
     TEAM_3,
     TEAM_4,
     TEAM_5,
+    TEAM_6,
     teamClassForEmpId,
     TRIO_ROW_BY_ID,
     TRIO_SANTIAGO_MIGUEL_JUAN,
@@ -216,7 +219,7 @@
     DUO_SANTIAGO_MIGUEL,
     DUO_JESUS_BRANDON,
     DUO_BRAYAN_MAURICIO,
-    DUO_JHONNY_CRISTIAN,
+    DUO_JONATHAN_DAVID,
     GRUPO_FIJO,
     GRUPO_NO_FIJO,
     IDS_FIJO,

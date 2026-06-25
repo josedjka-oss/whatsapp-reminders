@@ -11,8 +11,8 @@
     TRIO_SANTIAGO_MIGUEL_JUAN,
     TRIO_DESPACHO,
     DUO_SANTIAGO_MIGUEL,
-    DUO_JHONNY_CRISTIAN,
     DUO_BRAYAN_MAURICIO,
+    DUO_JONATHAN_DAVID,
     ALMUERZOS_SABADO,
     ALMUERZOS_SABADO_DUO,
     ALMUERZOS_TRES_FRANJAS,
@@ -23,10 +23,7 @@
   const { normAm } = window.ENGINE_HOURS;
 
   const ALMUERZO_DEFAULT = '1:00';
-  const JHONNY_ID   = 'jhonny_rodriguez';
-  const CRISTIAN_ID = 'cristian_uribe';
-  const JONATHAN_ID = 'jonathan_sanchez';
-  const DAVID_ID    = 'david_sanchez';
+  const JHONNY_ID = 'jhonny_rodriguez';
 
   const hashDia = (monthKey, d, salt) => {
     let h = 2166136261;
@@ -77,20 +74,15 @@
     return out;
   };
 
-  /** Jhonny / Cristian: alternan 1/2 día a día; jueves Jhonny 2 / Cristian 1. */
-  const getJhonnyCristianLunch = (d, monthKey, meta) => {
-    if (d.dow === 4) {
-      return { [JHONNY_ID]: '2:00', [CRISTIAN_ID]: '1:00' };
-    }
+  /** Jhonny solo: jueves 2:00; resto alterna 1:00/2:00 por día laborado. */
+  const getJhonnyLunchSolo = (d, monthKey, meta) => {
+    if (d.dow === 4) return '2:00';
     let n = 0;
     meta.days.forEach((od) => {
       if (od.day >= d.day || od.noLaborable) return;
       n += 1;
     });
-    const jhonnyFirst = n % 2 === 0;
-    return jhonnyFirst
-      ? { [JHONNY_ID]: '1:00', [CRISTIAN_ID]: '2:00' }
-      : { [JHONNY_ID]: '2:00', [CRISTIAN_ID]: '1:00' };
+    return n % 2 === 0 ? '1:00' : '2:00';
   };
 
   /** Dúo sábado: 12:30-1:00 y 1:00-1:30 (alternan quién va primero). */
@@ -187,13 +179,16 @@
       return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
-    if (DUO_JHONNY_CRISTIAN.includes(empId)) {
+    if (empId === JHONNY_ID) {
+      if (d.esSabado) return ALMUERZO_DEFAULT;
+      return getJhonnyLunchSolo(d, monthKey, meta);
+    }
+
+    if (DUO_JONATHAN_DAVID.includes(empId)) {
       if (d.esSabado) {
-        const map = getDuoSabadoLunch(DUO_JHONNY_CRISTIAN, d, monthKey, 'jc-sab');
+        const map = getDuoSabadoLunch(DUO_JONATHAN_DAVID, d, monthKey, 'jd-sab');
         return map[empId] ?? ALMUERZO_DEFAULT;
       }
-      const map = getJhonnyCristianLunch(d, monthKey, meta);
-      return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
     if (DUO_BRAYAN_MAURICIO.includes(empId)) {
@@ -201,11 +196,6 @@
         const map = getDuoSabadoLunch(DUO_BRAYAN_MAURICIO, d, monthKey, 'by-mau-sab');
         return map[empId] ?? ALMUERZO_DEFAULT;
       }
-    }
-
-    if (d.esSabado && (empId === JONATHAN_ID || empId === DAVID_ID)) {
-      const map = getDuoSabadoLunch([JONATHAN_ID, DAVID_ID], d, monthKey, 'jd-sab');
-      return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
     if (d.esSabado && empId === 'jhon_lozano') {
@@ -275,7 +265,7 @@
     lunchTimeToMinutes,
     parseLunchRange,
     getLunchTresGrupo,
-    getJhonnyCristianLunch,
+    getJhonnyLunchSolo,
     getDuoSabadoLunch,
   };
 
