@@ -78,6 +78,7 @@
           fillMissingCellsOnly,
           recalcExtras,
           step_normalizeSabadoEntrada } = window.ENGINE_SCHEDULER;
+  const { liftWeeklyTo44, capWeeklyTo44 } = window.ENGINE_CAP;
   const { buildLocksFromCells }     = window.ENGINE_PUT_CELL;
   const { getLunchDisplay,
           normalizeLunchTime }  = window.ENGINE_LUNCH;
@@ -688,8 +689,11 @@
 
     const hasSavedCells = payload?.cells && Object.keys(payload.cells).length > 0;
     if (hasSavedCells) {
-      refreshManualLocksFromCells(meta);
       fillMissingCellsOnly(state, monthKey);
+      // Ajustar 44h antes de bloquear celdas (locks impiden lift/cap).
+      liftWeeklyTo44(state, meta, null, null);
+      capWeeklyTo44(state, meta, null);
+      refreshManualLocksFromCells(meta);
     } else {
       ensureStateShape(state, monthKey);
     }

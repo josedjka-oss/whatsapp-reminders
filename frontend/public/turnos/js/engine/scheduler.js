@@ -259,6 +259,8 @@
     enforceTrioOneTenOneFive(state, meta);      // 14
     enforceTrioLunesNormal(state, meta);        // 14b
     step_enforceJuanFijo(state, meta);          // 14c
+    liftWeeklyTo44(state, meta, null, null);    // 14d — 44h tras restaurar trío/dúos (paso 12 queda anulado por 13b)
+    capWeeklyTo44(state, meta, null);           // 14e
     step_enforceGrupoFijo(state, meta);         // 15
     capFijosTo44(state, meta);                  // 16
     enforceJhonny(state, meta, null);           // 17
