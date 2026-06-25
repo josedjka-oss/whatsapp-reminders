@@ -224,6 +224,9 @@
     step_enforceGrupoFijo(state, meta);
     forceSabadoEntrada930(state, meta);
     finalizeNonFijo44Hours(state, meta, minDay);
+    enforceJhonny(state, meta, minDay);
+    liftJhonny(state, meta, monthKey, minDay);
+    capJhonnyTo44(state, meta, minDay);
   };
 
   // ─── PIPELINE PRINCIPAL ───────────────────────────────────────────────────────

@@ -440,10 +440,34 @@
   /**
    * Pasada final: no-fijos en semana calendario completa = exactamente 44h.
    * Solo muta días del mes visible; respeta días externos (crossMonthCells).
+   * Semanas borde: compara horas editables vs targetInMonthWeekHours (44 − Σ externa).
    */
   const finalizeNonFijo44Hours = (state, meta, minDay) => {
     const chunks = buildWeekChunks(meta);
     const dayOk  = dayOkMin(minDay);
+
+    const chunkHasExternal = (chunk) =>
+      chunk.some((d) => !d.inMonth && !d.noLaborable);
+
+    const needsLift = (id, chunk) => {
+      const full = sumWeekHours(id, chunk, state);
+      if (full >= CFG.HORAS_TOPE_SEMANA) return false;
+      if (chunkHasExternal(chunk)) {
+        return sumInMonthWeekHours(id, chunk, state)
+          < targetInMonthWeekHours(id, chunk, state);
+      }
+      return true;
+    };
+
+    const needsCap = (id, chunk) => {
+      const full = sumWeekHours(id, chunk, state);
+      if (full <= CFG.HORAS_TOPE_SEMANA) return false;
+      if (chunkHasExternal(chunk)) {
+        return sumInMonthWeekHours(id, chunk, state)
+          > targetInMonthWeekHours(id, chunk, state);
+      }
+      return true;
+    };
 
     for (let mega = 0; mega < 80; mega++) {
       let progressed = false;
@@ -460,7 +484,7 @@
             guard++;
             const full = sumWeekHours(id, chunk, state);
 
-            if (full > CFG.HORAS_TOPE_SEMANA) {
+            if (needsCap(id, chunk)) {
               if (id === 'cristian_uribe') {
                 capCristianTo44(state, meta, minDay);
                 if (sumWeekHours(id, chunk, state) < full) { progressed = true; continue; }
@@ -483,7 +507,7 @@
               break;
             }
 
-            if (full < CFG.HORAS_TOPE_SEMANA) {
+            if (needsLift(id, chunk)) {
               const d = chunk.find(d =>
                 esMutable(d, dayOk) && d.dow >= 1 && d.dow <= 5
                 && esNueveCinco(cellFor(state, id, d))
@@ -493,8 +517,21 @@
                 progressed = true;
                 continue;
               }
+              const d10 = chunk.find(d =>
+                esMutable(d, dayOk) && d.dow >= 1 && d.dow <= 5
+                && esDiezSeis(cellFor(state, id, d))
+                && id !== 'cristian_uribe'
+              );
+              if (d10) {
+                putCell(state, id, d10.day, '9', '6');
+                progressed = true;
+                continue;
+              }
               break;
             }
+
+            if (full === CFG.HORAS_TOPE_SEMANA) break;
+            break;
           }
         });
       });

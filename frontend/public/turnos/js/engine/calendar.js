@@ -119,6 +119,19 @@
     chunk.filter((d) => d.inMonth && d.day != null);
 
   const getLunesDeSemana = (d, allDays) => {
+    if (d?.date) {
+      const lunDt = new Date(d.date);
+      const dow = lunDt.getDay();
+      lunDt.setDate(lunDt.getDate() - (dow === 0 ? 6 : dow - 1));
+      const ymd = toYmd(lunDt);
+      const found = allDays?.find((x) => x.ymd === ymd);
+      if (found) return found;
+      return dayMetaFromDate(lunDt, {
+        year:  lunDt.getFullYear(),
+        month: lunDt.getMonth() + 1,
+        days:  allDays || [],
+      });
+    }
     const offset = d.dow === 1 ? 0 : d.dow === 0 ? -6 : -(d.dow - 1);
     const targetDay = d.day + offset;
     return allDays.find(x => x.day === targetDay) || null;
