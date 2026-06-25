@@ -164,6 +164,91 @@
     return normalizeLunchTime(ov);
   };
 
+  const MINUTOS_LUNCH_VALIDOS = new Set([0, 30]);
+
+  /** Rechaza basura heredada de Firebase (p. ej. 2:07, 12:32). */
+  const isValidManualLunch = (raw) => {
+    const s = String(raw ?? '').trim();
+    if (!s) return false;
+    const rangeMatch = /^(.+?)\s*(?:-|–|—|a)\s*(.+)$/i.exec(s);
+    if (rangeMatch) {
+      const startOk = isValidLunchStartToken(rangeMatch[1]);
+      const endOk   = isValidLunchStartToken(rangeMatch[2]);
+      return startOk && endOk;
+    }
+    return isValidLunchStartToken(s);
+  };
+
+  const isValidLunchStartToken = (raw) => {
+    const t = normalizeSingleLunchTime(String(raw ?? '').trim());
+    if (!t) return false;
+    const mi = parseInt(t.split(':')[1] || '0', 10);
+    return MINUTOS_LUNCH_VALIDOS.has(mi);
+  };
+
+  const formatComputedLunchDisplay = (empId, d, monthKey, state, meta) => {
+    const computed = getLunchDisplayComputed(empId, d, monthKey, state, meta);
+    if (d.esSabado && empId === 'jhon_lozano') return '3:00';
+    return applyDuracionAlmuerzoSabado(computed, d, empId);
+  };
+
+  const hasManualLunchOverride = (empId, d, monthKey, state, meta) => {
+    const manual = getLunchOverride(state, empId, d.day);
+    if (!manual || !isValidManualLunch(manual)) return false;
+    const auto = formatComputedLunchDisplay(empId, d, monthKey, state, meta);
+    return normalizeLunchTime(manual) !== normalizeLunchTime(auto);
+  };
+
+  const isSaturdayAutoLunch = (empId, d) => {
+    if (!d?.esSabado) return false;
+    if (empId === 'jhon_lozano') return true;
+    return GRUPO_MENSAJEROS.includes(empId)
+      || TRIO_SANTIAGO_MIGUEL_JUAN.includes(empId)
+      || TRIO_DESPACHO.includes(empId)
+      || DUO_JHONNY_CRISTIAN.includes(empId)
+      || DUO_JONATHAN_DAVID.includes(empId)
+      || DUO_BRAYAN_MAURICIO.includes(empId);
+  };
+
+  const shouldKeepLunchOverride = (empId, d, monthKey, state, meta) => {
+    const manual = getLunchOverride(state, empId, d.day);
+    if (!manual || !isValidManualLunch(manual)) return false;
+    if (isSaturdayAutoLunch(empId, d)) return false;
+    return hasManualLunchOverride(empId, d, monthKey, state, meta);
+  };
+
+  /** Elimina overrides inválidos o iguales al horario automático. */
+  const purgeStaleLunchOverrides = (state, monthKey) => {
+    if (!state?.lunchOverrides) return 0;
+    const meta = window.ENGINE_CALENDAR?.getMonthMeta?.(monthKey);
+    if (!meta) return 0;
+    let removed = 0;
+
+    Object.keys(state.lunchOverrides).forEach((empId) => {
+      Object.keys(state.lunchOverrides[empId]).forEach((dayStr) => {
+        const day = Number(dayStr);
+        const d   = meta.days.find((x) => x.day === day);
+        if (!d || !shouldKeepLunchOverride(empId, d, monthKey, state, meta)) {
+          delete state.lunchOverrides[empId][dayStr];
+          removed += 1;
+        }
+      });
+      if (Object.keys(state.lunchOverrides[empId]).length === 0) {
+        delete state.lunchOverrides[empId];
+      }
+    });
+
+    if (state.cells) {
+      Object.keys(state.cells).forEach((empId) => {
+        Object.keys(state.cells[empId] || {}).forEach((dayStr) => {
+          const cell = state.cells[empId][dayStr];
+          if (cell?.lunch != null) delete cell.lunch;
+        });
+      });
+    }
+    return removed;
+  };
+
   const getLunchDisplayComputed = (empId, d, monthKey, state, meta) => {
     if (GRUPO_MENSAJEROS.includes(empId)) {
       const map = getLunchTrio(state, d, monthKey, meta);
@@ -215,10 +300,16 @@
 
   const getLunchDisplay = (empId, d, monthKey, state, meta) => {
     if (d.noLaborable) return CFG.NO_LAB_MARK;
-    const manual = getLunchOverride(state, empId, d.day);
-    const base = manual || getLunchDisplayComputed(empId, d, monthKey, state, meta);
-    if (d.esSabado && empId === 'jhon_lozano') return '3:00';
-    return applyDuracionAlmuerzoSabado(base, d, empId);
+
+    if (hasManualLunchOverride(empId, d, monthKey, state, meta)) {
+      const manual = getLunchOverride(state, empId, d.day);
+      if (d.esSabado && empId !== 'jhon_lozano' && !/\s*(?:-|–|—|a)\s*/i.test(manual)) {
+        return applyDuracionAlmuerzoSabado(manual, d, empId);
+      }
+      return manual;
+    }
+
+    return formatComputedLunchDisplay(empId, d, monthKey, state, meta);
   };
 
   const minutosAlmuerzoSabado = (empId) => (
@@ -285,6 +376,11 @@
     assignTrioSabadoLunch,
     assignDuoSabadoLunch,
     assignJonathanDavidSabadoLunch,
+    hasManualLunchOverride,
+    purgeStaleLunchOverrides,
+    isValidManualLunch,
+    isSaturdayAutoLunch,
+    shouldKeepLunchOverride,
   };
 
   window.ENGINE_LUNCH = ENGINE_LUNCH;

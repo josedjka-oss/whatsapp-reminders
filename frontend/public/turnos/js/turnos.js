@@ -82,7 +82,10 @@
           step_normalizeSabadoEntrada } = window.ENGINE_SCHEDULER;
   const { buildLocksFromCells }     = window.ENGINE_PUT_CELL;
   const { getLunchDisplay,
-          normalizeLunchTime }  = window.ENGINE_LUNCH;
+          normalizeLunchTime,
+          hasManualLunchOverride,
+          purgeStaleLunchOverrides,
+          shouldKeepLunchOverride }  = window.ENGINE_LUNCH;
 
   // ── CONSTANTES ─────────────────────────────────────────────────────────────
 
@@ -359,6 +362,12 @@
         const normalized = normalizeLunchTime(raw);
         if (!state.lunchOverrides[emp.id]) state.lunchOverrides[emp.id] = {};
         state.lunchOverrides[emp.id][day] = normalized;
+        if (!shouldKeepLunchOverride(emp.id, d, monthKey, state, meta)) {
+          delete state.lunchOverrides[emp.id][day];
+          if (Object.keys(state.lunchOverrides[emp.id]).length === 0) {
+            delete state.lunchOverrides[emp.id];
+          }
+        }
       });
     });
 
@@ -453,15 +462,16 @@
         if (d.noLaborable) {
           html += `<td class="nl">${NO_LAB_MARK}</td>`;
         } else {
-          const txt = getLunchDisplay(empId, d, monthKey, state, meta) || '';
+          const txt    = getLunchDisplay(empId, d, monthKey, state, meta) || '';
+          const manual = hasManualLunchOverride(empId, d, monthKey, state, meta);
           html += `<td class="lunch-cell${oCls}">
-            ${READ_ONLY
+            ${READ_ONLY || !manual
               ? `<span class="lunch-time-txt cell-readonly">${txt || '–'}</span>`
               : `<input type="text" inputmode="text" class="cell-in cell-in-lunch"
               data-cell="${empId}-${d.day}-lunch"
               value="${txt}"
-              placeholder="12:32-1"
-              title="Almuerzo: 12:32 · 12:32-1:00 · 12:32 a 1. Vacío = horario automático."
+              placeholder="12:30"
+              title="Almuerzo manual (solo si difiere del automático). Vacío = horario automático."
               aria-label="${empLabel} día ${d.day} almuerzo" />`}</td>`;
         }
       }
@@ -781,6 +791,7 @@
       }
     }
 
+    purgeStaleLunchOverrides(state, monthKey);
     ensureStateShape(state, monthKey);
     overlayLockedCells(savedCells, savedLocks);
     state.manualAmPmLocks = savedLocks;
@@ -1386,6 +1397,7 @@
     regenerate: async (monthKey) => {
       const mk = monthKey || getActiveMonthKey();
       state.manualAmPmLocks = {};
+      purgeStaleLunchOverrides(state, mk);
       ensureStateShape(state, mk);
       await loadAdjacentMonthCells(mk);
       rebalanceAfterCrossMonth(mk);
