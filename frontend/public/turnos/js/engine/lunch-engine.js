@@ -18,6 +18,7 @@
     ALMUERZOS_SABADO_DUO,
     ALMUERZOS_TRES_FRANJAS,
     CFG,
+    usaAlmuerzoHoraSabado,
   } = window.ENGINE_CONSTANTS;
 
   const { getLunchTrio, getAusenteTrio, getLunchTrioDos } = window.ENGINE_RULES_MESSENGERS;
@@ -27,7 +28,11 @@
   const JHONNY_ID   = 'jhonny_rodriguez';
   const CRISTIAN_ID = 'cristian_uribe';
 
-  const { assignTrioSabadoLunch, assignDuoSabadoLunch } = window.ENGINE_LUNCH_SABADO;
+  const {
+    assignTrioSabadoLunch,
+    assignDuoSabadoLunch,
+    assignJonathanDavidSabadoLunch,
+  } = window.ENGINE_LUNCH_SABADO;
 
   const hashDia = (monthKey, d, salt) => {
     let h = 2166136261;
@@ -186,7 +191,7 @@
 
     if (DUO_JONATHAN_DAVID.includes(empId)) {
       if (d.esSabado) {
-        const map = assignDuoSabadoLunch(DUO_JONATHAN_DAVID, d, meta);
+        const map = assignJonathanDavidSabadoLunch(DUO_JONATHAN_DAVID, d, meta);
         return map[empId] ?? ALMUERZO_DEFAULT;
       }
     }
@@ -216,16 +221,21 @@
     return applyDuracionAlmuerzoSabado(base, d, empId);
   };
 
-  const lunchEndMinutesFromStart = (startMin, esSabado = false) => {
-    if (esSabado) return startMin + CFG.MINUTOS_ALMUERZO_SAB;
-    return (Math.floor(startMin / 60) + 1) * 60;
-  };
+  const minutosAlmuerzoSabado = (empId) => (
+    empId && usaAlmuerzoHoraSabado(empId)
+      ? CFG.HORAS_ALMUERZO * 60
+      : CFG.MINUTOS_ALMUERZO_SAB
+  );
 
-  const formatLunchSabado30 = (startFranja) => {
+  const lunchEndMinutesFromStart = (startMin, duracionMin) => (
+    startMin + duracionMin
+  );
+
+  const formatLunchSabadoRango = (startFranja, duracionMin) => {
     const start = normalizeSingleLunchTime(startFranja);
     if (!start) return String(startFranja ?? '').trim();
     const startMin = lunchTimeToMinutes(start);
-    const endMin = lunchEndMinutesFromStart(startMin, true);
+    const endMin   = lunchEndMinutesFromStart(startMin, duracionMin);
     return `${start}-${minToDisplay(endMin)}`;
   };
 
@@ -234,19 +244,25 @@
     const s = String(franja).trim();
     if (!s) return s;
     if (/\s*(?:-|–|—|a)\s*/i.test(s)) return s;
-    return formatLunchSabado30(s);
+    return formatLunchSabadoRango(s, minutosAlmuerzoSabado(empId));
   };
 
-  const parseLunchRange = (franja, esSabado = false) => {
+  const parseLunchRange = (franja, esSabado = false, empId = null) => {
+    const endFromStart = (startMin) => {
+      if (esSabado) {
+        return lunchEndMinutesFromStart(startMin, minutosAlmuerzoSabado(empId));
+      }
+      return (Math.floor(startMin / 60) + 1) * 60;
+    };
     const s = String(franja ?? '').trim();
     const parts = s.split(/\s*(?:-|–|—|a)\s*/i);
     if (parts.length >= 2 && parts[1].trim()) {
       const start = lunchTimeToMinutes(parts[0]);
       const end = lunchTimeToMinutes(parts[1]);
-      return { start, end: end > start ? end : lunchEndMinutesFromStart(start, esSabado) };
+      return { start, end: end > start ? end : endFromStart(start) };
     }
     const start = lunchTimeToMinutes(s);
-    return { start, end: lunchEndMinutesFromStart(start, esSabado) };
+    return { start, end: endFromStart(start) };
   };
 
   const minToDisplay = (min) => {
@@ -268,6 +284,7 @@
     getJhonnyCristianLunch,
     assignTrioSabadoLunch,
     assignDuoSabadoLunch,
+    assignJonathanDavidSabadoLunch,
   };
 
   window.ENGINE_LUNCH = ENGINE_LUNCH;
