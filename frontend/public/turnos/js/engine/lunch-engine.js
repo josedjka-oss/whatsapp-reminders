@@ -14,9 +14,9 @@
     DUO_JHONNY_CRISTIAN,
     DUO_BRAYAN_MAURICIO,
     ALMUERZOS_SABADO,
+    ALMUERZOS_SABADO_DUO,
     ALMUERZOS_TRES_FRANJAS,
     CFG,
-    usaAlmuerzoHoraSabado,
   } = window.ENGINE_CONSTANTS;
 
   const { getLunchTrio, getAusenteTrio, getLunchTrioDos } = window.ENGINE_RULES_MESSENGERS;
@@ -93,27 +93,15 @@
       : { [JHONNY_ID]: '2:00', [CRISTIAN_ID]: '1:00' };
   };
 
-  /** Dúo sábado: dos franjas consecutivas de 12:30/1:00/1:30, rotan cada sábado. */
+  /** Dúo sábado: 12:30-1:00 y 1:00-1:30 (alternan quién va primero). */
   const getDuoSabadoLunch = (ids, d, monthKey, salt) => {
     const ordered = [...ids].sort(
       (a, b) => ids.indexOf(a) - ids.indexOf(b)
     );
-    const startIdx = hashDia(monthKey, d, salt) % ALMUERZOS_SABADO.length;
-    const out = {};
-    out[ordered[0]] = ALMUERZOS_SABADO[startIdx];
-    out[ordered[1]] = ALMUERZOS_SABADO[(startIdx + 1) % ALMUERZOS_SABADO.length];
-    return out;
-  };
-
-  /** Jonathan / David sábado: alternan inicio 12:30 vs 1:00 (1 h c/u). */
-  const getJonathanDavidSatLunch = (d, monthKey, meta) => {
-    const prevSats = meta.days.filter(
-      x => x.esSabado && !x.noLaborable && x.day < d.day
-    ).length;
-    const flip = prevSats % 2;
+    const flip = hashDia(monthKey, d, salt) & 1;
     return flip
-      ? { [JONATHAN_ID]: '12:30', [DAVID_ID]: '1:00' }
-      : { [JONATHAN_ID]: '1:00', [DAVID_ID]: '12:30' };
+      ? { [ordered[0]]: ALMUERZOS_SABADO_DUO[1], [ordered[1]]: ALMUERZOS_SABADO_DUO[0] }
+      : { [ordered[0]]: ALMUERZOS_SABADO_DUO[0], [ordered[1]]: ALMUERZOS_SABADO_DUO[1] };
   };
 
   const lunchTimeToMinutes = (raw) => {
@@ -216,7 +204,7 @@
     }
 
     if (d.esSabado && (empId === JONATHAN_ID || empId === DAVID_ID)) {
-      const map = getJonathanDavidSatLunch(d, monthKey, meta);
+      const map = getDuoSabadoLunch([JONATHAN_ID, DAVID_ID], d, monthKey, 'jd-sab');
       return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
@@ -256,13 +244,6 @@
     const s = String(franja).trim();
     if (!s) return s;
     if (/\s*(?:-|–|—|a)\s*/i.test(s)) return s;
-    if (empId && usaAlmuerzoHoraSabado(empId)) {
-      const start = normalizeSingleLunchTime(s);
-      if (!start) return s;
-      const startMin = lunchTimeToMinutes(start);
-      const endMin = startMin + 60;
-      return `${start}-${minToDisplay(endMin)}`;
-    }
     return formatLunchSabado30(s);
   };
 
@@ -296,7 +277,6 @@
     getLunchTresGrupo,
     getJhonnyCristianLunch,
     getDuoSabadoLunch,
-    getJonathanDavidSatLunch,
   };
 
   window.ENGINE_LUNCH = ENGINE_LUNCH;

@@ -16,6 +16,7 @@
     TRIO_ROW_BY_ID,
     ALMUERZOS_MENSAJEROS,
     ALMUERZOS_SABADO,
+    ALMUERZOS_SABADO_DUO,
     CFG,
   } = window.ENGINE_CONSTANTS;
 
@@ -259,7 +260,7 @@
 
     if (ids.length === 2) return getLunchTrioDos(state, ids, d, monthKey);
 
-    // Sábado: rotación 12:30 · 1:00 · 1:30 (30 min c/u)
+    // Sábado trío: 12:30-1:00 · 1:00-1:30 · 1:30-2:00
     if (d.esSabado) {
       const perm = PERMS3[hashDia(monthKey, d, 'trio-sab3') % 6];
       const out  = {};
@@ -308,10 +309,10 @@
       const ordered = [...ids].sort(
         (a, b) => GRUPO_MENSAJEROS.indexOf(a) - GRUPO_MENSAJEROS.indexOf(b)
       );
-      const startIdx = hashDia(monthKey, d, 'trio2-sab') % 3;
+      const flip = hashDia(monthKey, d, 'trio2-sab') & 1;
       const out = {};
-      out[ordered[0]] = ALMUERZOS_SABADO[startIdx];
-      out[ordered[1]] = ALMUERZOS_SABADO[(startIdx + 1) % 3];
+      out[ordered[0]] = flip ? ALMUERZOS_SABADO_DUO[1] : ALMUERZOS_SABADO_DUO[0];
+      out[ordered[1]] = flip ? ALMUERZOS_SABADO_DUO[0] : ALMUERZOS_SABADO_DUO[1];
       return out;
     }
 

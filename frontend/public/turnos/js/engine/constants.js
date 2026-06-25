@@ -182,8 +182,10 @@
   };
 
   const ALMUERZOS_MENSAJEROS      = ['12:00', '1:00', '2:00'];
-  /** Inicios sábado (30 min); la franja más temprana es 12:30. */
+  /** Tríos sábado (30 min): 12:30 · 1:00 · 1:30 → 1:30-2:00. */
   const ALMUERZOS_SABADO          = ['12:30', '1:00', '1:30'];
+  /** Dúos sábado (30 min): solo 12:30-1:00 y 1:00-1:30. */
+  const ALMUERZOS_SABADO_DUO      = ['12:30', '1:00'];
   const ALMUERZOS_TRES_FRANJAS    = ['12:00', '1:00', '2:00'];
 
   const formatEmpNameHtml = (fullName) => {
@@ -227,6 +229,7 @@
     RESTRICCIONES_AJUSTE,
     ALMUERZOS_MENSAJEROS,
     ALMUERZOS_SABADO,
+    ALMUERZOS_SABADO_DUO,
     ALMUERZOS_TRES_FRANJAS,
     EXCEPCION_SABADO_ENTRADA_9,
     IDS_SABADO_ENTRADA_9,
