@@ -94,6 +94,8 @@
     ...DUO_BRAYAN_MAURICIO,
   ]);
   const COLLECTION  = 'programacionAlmuerzos';
+  /** Documentos anteriores guardaban locks de todas las celdas; solo respetar locks explícitos. */
+  const LOCK_POLICY = 'explicit-only';
   const COL_PHONES  = 'empleadosTelefonos';
   const NO_LAB_MARK = CFG.NO_LAB_MARK;
   const DIAS_SEMANA = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
@@ -171,6 +173,36 @@
       EMPLEADOS,
       state.manualAmPmLocks
     );
+  };
+
+  /** Ignora manualAmPmLocks heredados que congelaban toda la planilla al guardar. */
+  const normalizeLoadedLocks = (payload, monthKey) => {
+    if (!payload || payload.lockPolicy === LOCK_POLICY) {
+      return payload?.manualAmPmLocks
+        ? JSON.parse(JSON.stringify(payload.manualAmPmLocks))
+        : {};
+    }
+    const locks = payload.manualAmPmLocks;
+    if (!locks || typeof locks !== 'object') return {};
+    const meta = getMonthMeta(monthKey);
+    let lockFields = 0;
+    let laborableDays = 0;
+    meta.days.forEach((d) => { if (!d.noLaborable) laborableDays++; });
+    EMPLEADOS.forEach(({ id }) => {
+      Object.keys(locks[id] || {}).forEach((dayStr) => {
+        const fl = locks[id][dayStr];
+        if (fl?.am) lockFields++;
+        if (fl?.pm) lockFields++;
+      });
+    });
+    const totalFields = Math.max(1, EMPLEADOS.length * laborableDays * 2);
+    if (lockFields > totalFields * 0.15) {
+      console.warn(
+        `[turnos] ${monthKey}: ignorando ${lockFields} locks heredados; use TURNOS_DEBUG.regenerate() si hace falta.`
+      );
+      return {};
+    }
+    return JSON.parse(JSON.stringify(locks));
   };
 
   /** Restaura solo celdas que el usuario bloqueó manualmente (no toda la planilla). */
@@ -570,10 +602,10 @@
       collectFromDom();
       lockVisibleAmPmFromDom();
       const meta = getMonthMeta(monthKey);
-      refreshManualLocksFromCells(meta);
 
       const payload = {
         monthKey,
+        lockPolicy:           LOCK_POLICY,
         horasExtras:          cloneJson(state.horasExtras),
         cells:                cloneCells(state.cells),
         lunchOverrides:       cloneJson(state.lunchOverrides),
@@ -683,9 +715,7 @@
   const applyPayload = async (monthKey, payload, options = {}) => {
     syncMonthPicker(monthKey);
     const savedCells = payload?.cells ? cloneCells(payload.cells) : null;
-    const savedLocks = payload?.manualAmPmLocks
-      ? JSON.parse(JSON.stringify(payload.manualAmPmLocks))
-      : {};
+    const savedLocks = normalizeLoadedLocks(payload, monthKey);
 
     state = {
       monthKey,
@@ -1354,6 +1384,21 @@
     getMonthKey: () => getActiveMonthKey(),
     validate: (monthKey) =>
       window.ENGINE_VALIDATOR?.printValidation(state, monthKey || getActiveMonthKey()),
+    regenerate: async (monthKey) => {
+      const mk = monthKey || getActiveMonthKey();
+      state.manualAmPmLocks = {};
+      ensureStateShape(state, mk);
+      await loadAdjacentMonthCells(mk);
+      rebalanceAfterCrossMonth(mk);
+      recalcExtras(state, mk);
+      render(true);
+      return window.ENGINE_VALIDATOR?.printValidation(state, mk);
+    },
+    regenerateAndSave: async (monthKey) => {
+      const errors = await window.TURNOS_DEBUG.regenerate(monthKey);
+      const ok = await saveToFirebase(false);
+      return { errors, saved: ok };
+    },
   };
 
 })();
