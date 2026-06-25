@@ -206,8 +206,7 @@
       || TRIO_SANTIAGO_MIGUEL_JUAN.includes(empId)
       || TRIO_DESPACHO.includes(empId)
       || DUO_JHONNY_CRISTIAN.includes(empId)
-      || DUO_JONATHAN_DAVID.includes(empId)
-      || DUO_BRAYAN_MAURICIO.includes(empId);
+      || DUO_JONATHAN_DAVID.includes(empId);
   };
 
   const shouldKeepLunchOverride = (empId, d, monthKey, state, meta) => {
@@ -277,13 +276,6 @@
     if (DUO_JONATHAN_DAVID.includes(empId)) {
       if (d.esSabado) {
         const map = assignJonathanDavidSabadoLunch(DUO_JONATHAN_DAVID, d, meta);
-        return map[empId] ?? ALMUERZO_DEFAULT;
-      }
-    }
-
-    if (DUO_BRAYAN_MAURICIO.includes(empId)) {
-      if (d.esSabado) {
-        const map = assignDuoSabadoLunch(DUO_BRAYAN_MAURICIO, d, meta);
         return map[empId] ?? ALMUERZO_DEFAULT;
       }
     }

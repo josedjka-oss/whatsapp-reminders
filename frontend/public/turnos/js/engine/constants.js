@@ -164,7 +164,7 @@
     'david_sanchez':     '1:00',
   };
 
-  /** Almuerzo fijo lun–vie; sábado usa rotación por equipo (salvo Jhon Lozano 3:00). */
+  /** Almuerzo fijo todos los días (Mauricio 1:00 · Brayan Y 3:00 · incluye sábado). */
   const almuerzoFijoSemana = (empId) => ALMUERZO_FIJO[empId] ?? null;
 
   const RESTRICCIONES_AJUSTE = {
