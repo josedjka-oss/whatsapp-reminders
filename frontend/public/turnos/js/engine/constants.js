@@ -86,7 +86,7 @@
   const TEAM_MENSAJEROS = GRUPO_MENSAJEROS;
   const TEAM_2 = ['santiago_guarnizo', 'miguel_fonseca', 'juan_giron'];
   const TEAM_3 = ['brayan_ramirez', 'brandon', 'jesus_perez'];
-  const TEAM_4 = ['jhonny_rodriguez'];
+  const TEAM_4 = ['jhonny_rodriguez', 'cristian_uribe'];
   const TEAM_5 = ['brayan_yate', 'mauricio_bautista'];
   const TEAM_6 = ['jonathan_sanchez', 'david_sanchez'];
 
@@ -120,7 +120,10 @@
 
   const DUO_BRAYAN_MAURICIO = ['brayan_yate', 'mauricio_bautista'];
 
-  /** Dúo Jonathan / David (equipo 6 — almuerzo sábado y color planilla). */
+  /** Equipo 4 — Jhonny / Cristian (almuerzo sábado dúo). */
+  const DUO_JHONNY_CRISTIAN = ['jhonny_rodriguez', 'cristian_uribe'];
+
+  /** Dúo Jonathan / David (equipo 6). */
   const DUO_JONATHAN_DAVID = ['jonathan_sanchez', 'david_sanchez'];
 
   /** Fijos horario: 9/6 lun–vie, 9:30/5 sáb (Jonathan/David → 9/5 sáb). */
@@ -219,6 +222,7 @@
     DUO_SANTIAGO_MIGUEL,
     DUO_JESUS_BRANDON,
     DUO_BRAYAN_MAURICIO,
+    DUO_JHONNY_CRISTIAN,
     DUO_JONATHAN_DAVID,
     GRUPO_FIJO,
     GRUPO_NO_FIJO,

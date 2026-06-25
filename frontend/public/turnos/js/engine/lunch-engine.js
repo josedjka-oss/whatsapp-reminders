@@ -12,6 +12,7 @@
     TRIO_DESPACHO,
     DUO_SANTIAGO_MIGUEL,
     DUO_BRAYAN_MAURICIO,
+    DUO_JHONNY_CRISTIAN,
     DUO_JONATHAN_DAVID,
     ALMUERZOS_SABADO,
     ALMUERZOS_SABADO_DUO,
@@ -23,7 +24,10 @@
   const { normAm } = window.ENGINE_HOURS;
 
   const ALMUERZO_DEFAULT = '1:00';
-  const JHONNY_ID = 'jhonny_rodriguez';
+  const JHONNY_ID   = 'jhonny_rodriguez';
+  const CRISTIAN_ID = 'cristian_uribe';
+
+  const { assignTrioSabadoLunch, assignDuoSabadoLunch } = window.ENGINE_LUNCH_SABADO;
 
   const hashDia = (monthKey, d, salt) => {
     let h = 2166136261;
@@ -40,15 +44,13 @@
   /**
    * Almuerzo 12/1/2 para un grupo de 3: quien entra 10 → 2:00; los otros alternan 12/1.
    */
-  const getLunchTresGrupo = (state, d, monthKey, ids, salt) => {
+  const getLunchTresGrupo = (state, d, monthKey, ids, salt, meta) => {
     const dayNum = d.day;
     const conDiez = ids.filter(id => normAm(state.cells[id]?.[dayNum]) === '10');
     const out = {};
 
     if (d.esSabado) {
-      const perm = PERMS6[hashDia(monthKey, d, `${salt}-sab`) % 6];
-      ids.forEach((id, i) => { out[id] = ALMUERZOS_SABADO[perm[i]]; });
-      return out;
+      return assignTrioSabadoLunch(ids, d, meta);
     }
 
     if (conDiez.length === 1) {
@@ -74,26 +76,20 @@
     return out;
   };
 
-  /** Jhonny solo: jueves 2:00; resto alterna 1:00/2:00 por día laborado. */
-  const getJhonnyLunchSolo = (d, monthKey, meta) => {
-    if (d.dow === 4) return '2:00';
+  /** Jhonny / Cristian lun–vie: alternan 1/2; jueves Jhonny 2 / Cristian 1. */
+  const getJhonnyCristianLunch = (d, monthKey, meta) => {
+    if (d.dow === 4) {
+      return { [JHONNY_ID]: '2:00', [CRISTIAN_ID]: '1:00' };
+    }
     let n = 0;
     meta.days.forEach((od) => {
       if (od.day >= d.day || od.noLaborable) return;
       n += 1;
     });
-    return n % 2 === 0 ? '1:00' : '2:00';
-  };
-
-  /** Dúo sábado: 12:30-1:00 y 1:00-1:30 (alternan quién va primero). */
-  const getDuoSabadoLunch = (ids, d, monthKey, salt) => {
-    const ordered = [...ids].sort(
-      (a, b) => ids.indexOf(a) - ids.indexOf(b)
-    );
-    const flip = hashDia(monthKey, d, salt) & 1;
-    return flip
-      ? { [ordered[0]]: ALMUERZOS_SABADO_DUO[1], [ordered[1]]: ALMUERZOS_SABADO_DUO[0] }
-      : { [ordered[0]]: ALMUERZOS_SABADO_DUO[0], [ordered[1]]: ALMUERZOS_SABADO_DUO[1] };
+    const jhonnyFirst = n % 2 === 0;
+    return jhonnyFirst
+      ? { [JHONNY_ID]: '1:00', [CRISTIAN_ID]: '2:00' }
+      : { [JHONNY_ID]: '2:00', [CRISTIAN_ID]: '1:00' };
   };
 
   const lunchTimeToMinutes = (raw) => {
@@ -165,35 +161,39 @@
 
   const getLunchDisplayComputed = (empId, d, monthKey, state, meta) => {
     if (GRUPO_MENSAJEROS.includes(empId)) {
-      const map = getLunchTrio(state, d, monthKey);
+      const map = getLunchTrio(state, d, monthKey, meta);
       return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
     if (TRIO_SANTIAGO_MIGUEL_JUAN.includes(empId)) {
-      const map = getLunchTresGrupo(state, d, monthKey, TRIO_SANTIAGO_MIGUEL_JUAN, 'smj');
+      const map = getLunchTresGrupo(state, d, monthKey, TRIO_SANTIAGO_MIGUEL_JUAN, 'smj', meta);
       return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
     if (TRIO_DESPACHO.includes(empId)) {
-      const map = getLunchTresGrupo(state, d, monthKey, TRIO_DESPACHO, 'desp');
+      const map = getLunchTresGrupo(state, d, monthKey, TRIO_DESPACHO, 'desp', meta);
       return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
-    if (empId === JHONNY_ID) {
-      if (d.esSabado) return ALMUERZO_DEFAULT;
-      return getJhonnyLunchSolo(d, monthKey, meta);
+    if (DUO_JHONNY_CRISTIAN.includes(empId)) {
+      if (d.esSabado) {
+        const map = assignDuoSabadoLunch(DUO_JHONNY_CRISTIAN, d, meta);
+        return map[empId] ?? ALMUERZO_DEFAULT;
+      }
+      const map = getJhonnyCristianLunch(d, monthKey, meta);
+      return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
     if (DUO_JONATHAN_DAVID.includes(empId)) {
       if (d.esSabado) {
-        const map = getDuoSabadoLunch(DUO_JONATHAN_DAVID, d, monthKey, 'jd-sab');
+        const map = assignDuoSabadoLunch(DUO_JONATHAN_DAVID, d, meta);
         return map[empId] ?? ALMUERZO_DEFAULT;
       }
     }
 
     if (DUO_BRAYAN_MAURICIO.includes(empId)) {
       if (d.esSabado) {
-        const map = getDuoSabadoLunch(DUO_BRAYAN_MAURICIO, d, monthKey, 'by-mau-sab');
+        const map = assignDuoSabadoLunch(DUO_BRAYAN_MAURICIO, d, meta);
         return map[empId] ?? ALMUERZO_DEFAULT;
       }
     }
@@ -265,8 +265,9 @@
     lunchTimeToMinutes,
     parseLunchRange,
     getLunchTresGrupo,
-    getJhonnyLunchSolo,
-    getDuoSabadoLunch,
+    getJhonnyCristianLunch,
+    assignTrioSabadoLunch,
+    assignDuoSabadoLunch,
   };
 
   window.ENGINE_LUNCH = ENGINE_LUNCH;

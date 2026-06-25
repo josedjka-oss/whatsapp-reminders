@@ -251,21 +251,17 @@
    * @param {string}  monthKey
    * @returns {Object.<string,string>}
    */
-  const getLunchTrio = (state, d, monthKey) => {
+  const getLunchTrio = (state, d, monthKey, meta) => {
     const dayNum  = d.day;
     const ausente = getAusenteTrio(state, dayNum);
     const ids     = ausente
       ? GRUPO_MENSAJEROS.filter(x => x !== ausente)
       : [...GRUPO_MENSAJEROS];
 
-    if (ids.length === 2) return getLunchTrioDos(state, ids, d, monthKey);
+    if (ids.length === 2) return getLunchTrioDos(state, ids, d, monthKey, meta);
 
-    // Sábado trío: 12:30-1:00 · 1:00-1:30 · 1:30-2:00
     if (d.esSabado) {
-      const perm = PERMS3[hashDia(monthKey, d, 'trio-sab3') % 6];
-      const out  = {};
-      ids.forEach((id, i) => { out[id] = ALMUERZOS_SABADO[perm[i]]; });
-      return out;
+      return window.ENGINE_LUNCH_SABADO.assignTrioSabadoLunch(ids, d, meta);
     }
 
     const conDiez  = ids.filter(id => normAm(state.cells[id]?.[dayNum]) === '10');
@@ -302,18 +298,11 @@
   /**
    * Almuerzos del trío cuando hay un ausente (solo 2 presentes).
    */
-  const getLunchTrioDos = (state, ids, d, monthKey) => {
+  const getLunchTrioDos = (state, ids, d, monthKey, meta) => {
     const dayNum   = d.day;
 
     if (d.esSabado) {
-      const ordered = [...ids].sort(
-        (a, b) => GRUPO_MENSAJEROS.indexOf(a) - GRUPO_MENSAJEROS.indexOf(b)
-      );
-      const flip = hashDia(monthKey, d, 'trio2-sab') & 1;
-      const out = {};
-      out[ordered[0]] = flip ? ALMUERZOS_SABADO_DUO[1] : ALMUERZOS_SABADO_DUO[0];
-      out[ordered[1]] = flip ? ALMUERZOS_SABADO_DUO[0] : ALMUERZOS_SABADO_DUO[1];
-      return out;
+      return window.ENGINE_LUNCH_SABADO.assignDuoSabadoLunch(ids, d, meta);
     }
 
     const conDiez  = ids.filter(id => normAm(state.cells[id]?.[dayNum]) === '10');
