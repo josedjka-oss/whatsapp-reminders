@@ -35,19 +35,25 @@ const TASK_META: Record<
   },
 };
 
-/** Secreto compartido: Firebase (solo Functions, nunca cliente) usa este header. */
+/** Firebase Functions o proxy Vercel (ADMIN_PASSWORD como alternativa en panel). */
 const requireIntegrationSecret = (
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  const expected = process.env.INTEGRATION_FIREBASE_SECRET?.trim();
-  if (!expected) {
+  const allowed = [
+    process.env.INTEGRATION_FIREBASE_SECRET?.trim(),
+    process.env.ADMIN_PASSWORD?.trim(),
+  ].filter((v): v is string => Boolean(v));
+
+  if (!allowed.length) {
     res.status(503).json({
-      error: "INTEGRATION_FIREBASE_SECRET no está configurado en el servidor.",
+      error:
+        "INTEGRATION_FIREBASE_SECRET o ADMIN_PASSWORD debe estar configurado en el servidor.",
     });
     return;
   }
+
   const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
   const apiKeyRaw = req.headers["x-api-key"];
   const apiKey =
@@ -56,7 +62,7 @@ const requireIntegrationSecret = (
       : undefined;
   const provided = bearer || apiKey;
 
-  if (!provided || provided !== expected) {
+  if (!provided || !allowed.includes(provided)) {
     res.status(401).json({
       error: "Credencial de integración inválida. Usa Authorization: Bearer … o header x-api-key.",
     });

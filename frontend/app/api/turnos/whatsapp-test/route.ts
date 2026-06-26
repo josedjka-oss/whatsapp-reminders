@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
     }
 
     const backendUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
-    const secret = process.env.INTEGRATION_FIREBASE_SECRET?.trim();
+    const secret =
+      process.env.INTEGRATION_FIREBASE_SECRET?.trim()
+      || process.env.ADMIN_PASSWORD?.trim();
 
     if (!backendUrl) {
       return NextResponse.json(
@@ -44,7 +46,11 @@ export async function POST(request: NextRequest) {
     }
     if (!secret) {
       return NextResponse.json(
-        { ok: false, error: "INTEGRATION_FIREBASE_SECRET no configurado en Vercel" },
+        {
+          ok: false,
+          error:
+            "Falta INTEGRATION_FIREBASE_SECRET o ADMIN_PASSWORD en Vercel (Settings → Environment Variables). Copia el mismo valor que en Render.",
+        },
         { status: 500 }
       );
     }
