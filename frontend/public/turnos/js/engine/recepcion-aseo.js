@@ -82,27 +82,27 @@
    */
 
   const buildAseoRecepcionPorDia = (state, meta, monthKey, basuraMap = null) => {
-
     const map    = {};
-
     const counts = Object.fromEntries(ASEO_RECEPCION_IDS.map((id) => [id, 0]));
-
-
+    const manual = state?.aseoOverrides || {};
 
     const days = meta.days
-
       .filter((d) => !d.noLaborable && d.dow >= 1 && d.dow <= 6)
-
-      .sort((a, b) => hashMix(`${monthKey}|d|${a.day}`) - hashMix(`${monthKey}|d|${b.day}`));
-
-
+      .sort((a, b) => a.day - b.day);
 
     const monthSeed = hashMix(monthKey || '');
 
-
-
     days.forEach((d) => {
       const basuraEmp = basuraMap?.[d.day] ?? basuraMap?.[String(d.day)] ?? null;
+      const manualEmp = manual[d.day] ?? manual[String(d.day)] ?? null;
+
+      if (manualEmp && ASEO_RECEPCION_IDS.includes(manualEmp)) {
+        if (!basuraEmp || manualEmp !== basuraEmp) {
+          map[d.day] = manualEmp;
+          counts[manualEmp] += 1;
+          return;
+        }
+      }
 
       const eligible = ASEO_RECEPCION_IDS.filter((id) => {
         if (basuraEmp && id === basuraEmp) return false;
@@ -112,34 +112,19 @@
 
       if (!eligible.length) return;
 
-
-
       eligible.sort((a, b) => {
-
         if (counts[a] !== counts[b]) return counts[a] - counts[b];
-
         const ia = (ASEO_RECEPCION_IDS.indexOf(a) + monthSeed) % ASEO_RECEPCION_IDS.length;
-
         const ib = (ASEO_RECEPCION_IDS.indexOf(b) + monthSeed) % ASEO_RECEPCION_IDS.length;
-
         return ia - ib;
-
       });
 
-
-
       const pick = eligible[0];
-
       map[d.day] = pick;
-
       counts[pick] += 1;
-
     });
 
-
-
     return map;
-
   };
 
 

@@ -53,10 +53,14 @@
   const isEntradaDiez = (v) => normAm({ am: v }) === '10';
   const isSalidaCinco = (v) => normPm({ pm: v }) === '5';
 
+  const isManualAseoToken = (raw) => /^9\s*A$/i.test(String(raw ?? '').trim());
+  const isManualBasuraToken = (raw) => /^6\s*B$/i.test(String(raw ?? '').trim());
+
   /** Normaliza am guardado en state (9 · 10 · 930) para elegibilidad aseo/basura. */
   const normalizeCellAm = (raw) => {
     const v = String(raw ?? '').trim();
     if (v === '') return '';
+    if (isManualAseoToken(v)) return '9';
     if (esAusenteEntradaCeroRaw(v)) return '0';
     const parsed = normAm({ am: v });
     if (parsed === null) return v;
@@ -69,10 +73,27 @@
   const normalizeCellPm = (raw) => {
     const v = String(raw ?? '').trim();
     if (v === '') return '';
+    if (isManualBasuraToken(v)) return '6';
     const parsed = normPm({ pm: v });
     if (parsed === 17) return '5';
     if (parsed === 18) return '6';
     return v;
+  };
+
+  const getAseoOverrideEmp = (day) =>
+    state.aseoOverrides?.[day] ?? state.aseoOverrides?.[String(day)] ?? null;
+
+  const getBasuraOverrideEmp = (day) =>
+    state.basuraOverrides?.[day] ?? state.basuraOverrides?.[String(day)] ?? null;
+
+  const amDisplayForCell = (empId, d, c) => {
+    if (getAseoOverrideEmp(d.day) === empId) return '9A';
+    return formatAmDisplay(c.am) || '';
+  };
+
+  const pmDisplayForCell = (empId, d, c) => {
+    if (getBasuraOverrideEmp(d.day) === empId) return '6B';
+    return c.pm || '';
   };
 
   /** Recalcula aseo/basura (dependen de am/pm actuales) y repinta. */
@@ -138,6 +159,8 @@
     horasExtras:          {},
     cells:                {},
     lunchOverrides:       {},
+    aseoOverrides:        {},
+    basuraOverrides:      {},
     flagsDiaMarcadoNoLab: {},
     trioAusentePorDia:    {},
     manualAmPmLocks:      {},
@@ -349,6 +372,9 @@
 
     if (!state.lunchOverrides) state.lunchOverrides = {};
 
+    const nextAseoOverrides    = {};
+    const nextBasuraOverrides  = {};
+
     EMPLEADOS.forEach((emp) => {
       if (!state.cells[emp.id]) state.cells[emp.id] = {};
       meta.days.forEach((d) => {
@@ -369,8 +395,17 @@
         const pmIn = q(`input[data-cell="${emp.id}-${day}-pm"]`);
         const amRaw = amIn ? amIn.value.trim() : '';
         const pmRaw = pmIn ? pmIn.value.trim() : '';
+
+        if (isManualAseoToken(amRaw)) nextAseoOverrides[day] = emp.id;
+        if (isManualBasuraToken(pmRaw)) nextBasuraOverrides[day] = emp.id;
+
         if (esAusenteEntradaCeroRaw(amRaw)) {
           state.cells[emp.id][day] = { am: '0', pm: '' };
+        } else if (isManualAseoToken(amRaw)) {
+          state.cells[emp.id][day] = {
+            am: d.esSabado ? CFG.AM_SABADO : '9',
+            pm: normalizeCellPm(pmRaw),
+          };
         } else {
           state.cells[emp.id][day] = {
             am: normalizeCellAm(amRaw),
@@ -402,6 +437,8 @@
       });
     });
 
+    state.aseoOverrides   = nextAseoOverrides;
+    state.basuraOverrides = nextBasuraOverrides;
     state.monthKey = monthKey;
     recalcExtras(state, monthKey);
   };
@@ -441,8 +478,10 @@
       const ausenteCero = !d.noLaborable && esEntradaAusenteCero(c);
       const marcado = ausente || noLab || ausenteCero;
       const oCls    = marcado ? ' celda-dia-marcado-naranja' : '';
-      const isAseo   = isAseoRecepcionDia(aseoMap, empId, d.day);
-      const isBasura = isBasuraSacadaDia(basuraMap, empId, d.day);
+      const isAseo   = isAseoRecepcionDia(aseoMap, empId, d.day)
+        || getAseoOverrideEmp(d.day) === empId;
+      const isBasura = isBasuraSacadaDia(basuraMap, empId, d.day)
+        || getBasuraOverrideEmp(d.day) === empId;
       const tdFlags  = { isAseo, isBasura };
 
       if (rowKind === 'am') {
@@ -453,17 +492,19 @@
             <div class="celda-aseo-inner">
               <span class="aseo-in-label">Aseo</span>
               ${READ_ONLY
-                ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} aseo">${roVal(c.am)}</span>`
-                : `<input type="text" inputmode="numeric" class="cell-in"
-                data-cell="${empId}-${d.day}-am" value="${formatAmDisplay(c.am)}"
+                ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} aseo">${amDisplayForCell(empId, d, c) || '–'}</span>`
+                : `<input type="text" inputmode="text" class="cell-in"
+                data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
+                title="9A = aseo manual este día"
                 aria-label="${empLabel} día ${d.day} aseo recepción ${horaAseoRecepcion(!!d.esSabado)}" />`}
             </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
             ${READ_ONLY
               ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} entrada">${roVal(c.am)}</span>`
-              : `<input type="text" inputmode="numeric" class="cell-in"
-              data-cell="${empId}-${d.day}-am" value="${formatAmDisplay(c.am)}"
+              : `<input type="text" inputmode="text" class="cell-in"
+              data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
+              title="9A = aseo manual este día"
               aria-label="${empLabel} día ${d.day} entrada" />`}</td>`;
         }
 
@@ -475,17 +516,19 @@
             <div class="celda-basura-inner">
               <span class="basura-in-label">Basura</span>
               ${READ_ONLY
-                ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} basura">${roVal(c.pm)}</span>`
-                : `<input type="text" inputmode="numeric" class="cell-in"
-                data-cell="${empId}-${d.day}-pm" value="${c.pm}"
+                ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} basura">${pmDisplayForCell(empId, d, c) || '–'}</span>`
+                : `<input type="text" inputmode="text" class="cell-in"
+                data-cell="${empId}-${d.day}-pm" value="${pmDisplayForCell(empId, d, c)}"
+                title="6B = basura manual este día"
                 aria-label="${empLabel} día ${d.day} sacada de basura 18:00" />`}
             </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'pm', c, d, tdFlags)}
             ${READ_ONLY
               ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} salida">${roVal(c.pm)}</span>`
-              : `<input type="text" inputmode="numeric" class="cell-in"
-              data-cell="${empId}-${d.day}-pm" value="${c.pm}"
+              : `<input type="text" inputmode="text" class="cell-in"
+              data-cell="${empId}-${d.day}-pm" value="${pmDisplayForCell(empId, d, c)}"
+              title="6B = basura manual este día"
               aria-label="${empLabel} día ${d.day} salida" />`}</td>`;
         }
 
@@ -652,6 +695,8 @@
         horasExtras:          cloneJson(state.horasExtras),
         cells:                cloneCells(state.cells),
         lunchOverrides:       cloneJson(state.lunchOverrides),
+        aseoOverrides:        cloneJson(state.aseoOverrides),
+        basuraOverrides:      cloneJson(state.basuraOverrides),
         flagsDiaMarcadoNoLab: cloneJson(state.flagsDiaMarcadoNoLab),
         trioAusentePorDia:    cloneJson(state.trioAusentePorDia),
         manualAmPmLocks:      cloneJson(state.manualAmPmLocks),
@@ -701,6 +746,8 @@
       horasExtras:          {},
       cells:                {},
       lunchOverrides:       {},
+      aseoOverrides:        {},
+      basuraOverrides:      {},
       flagsDiaMarcadoNoLab: {},
       trioAusentePorDia:    {},
       manualAmPmLocks:      {},
@@ -765,6 +812,8 @@
       horasExtras:          {},
       cells:                {},
       lunchOverrides:       {},
+      aseoOverrides:        {},
+      basuraOverrides:      {},
       flagsDiaMarcadoNoLab: {},
       trioAusentePorDia:    {},
       manualAmPmLocks:      {},
@@ -772,6 +821,13 @@
     };
 
     if (payload && typeof payload === 'object') {
+      if (payload.aseoOverrides && typeof payload.aseoOverrides === 'object') {
+        state.aseoOverrides = JSON.parse(JSON.stringify(payload.aseoOverrides));
+      }
+      if (payload.basuraOverrides && typeof payload.basuraOverrides === 'object') {
+        state.basuraOverrides = JSON.parse(JSON.stringify(payload.basuraOverrides));
+      }
+
       if (payload.lunchOverrides) {
         Object.keys(payload.lunchOverrides).forEach((empId) => {
           if (!state.lunchOverrides[empId]) state.lunchOverrides[empId] = {};

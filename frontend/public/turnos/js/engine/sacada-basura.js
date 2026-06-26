@@ -42,6 +42,7 @@
   const buildBasuraPorDia = (state, meta, monthKey) => {
     const map       = {};
     const counts    = Object.fromEntries(BASURA_SACADA_IDS.map((id) => [id, 0]));
+    const manual    = state?.basuraOverrides || {};
     let lastPick    = null;
 
     const days = meta.days
@@ -51,6 +52,15 @@
     const monthSeed = hashMix(`${monthKey}|basura`);
 
     days.forEach((d) => {
+      const manualEmp = manual[d.day] ?? manual[String(d.day)] ?? null;
+
+      if (manualEmp && BASURA_SACADA_IDS.includes(manualEmp)) {
+        map[d.day] = manualEmp;
+        counts[manualEmp] += 1;
+        lastPick = manualEmp;
+        return;
+      }
+
       let eligible = BASURA_SACADA_IDS.filter((id) => {
         const pm = state.cells[id]?.[d.day]?.pm;
         return puedeSacarBasura(pm);
