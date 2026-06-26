@@ -1134,6 +1134,7 @@
 
   const CF_PROBAR_WA = 'https://us-central1-cajacentro-v6.cloudfunctions.net/probarWhatsAppTareas';
   const WHATSAPP_RENDER_API = 'https://whatsapp-reminders-mzex.onrender.com';
+  const WHATSAPP_TEST_PROXY = '/api/turnos/whatsapp-test';
   const WA_CONTACT_PRUEBA = { id: 'custom_prueba', name: 'PRUEBA' };
 
   const escapeHtml = (s) => String(s ?? '')
@@ -1195,7 +1196,7 @@
     const tasks = whatsappTasksForEmp(empId);
     const badges = [];
     if (tasks.aseo) badges.push('<span class="wa-badge wa-badge-aseo">Aseo</span>');
-    if (tasks.cocina) badges.push('<span class="wa-badge wa-badge-cocina">Cocina</span>');
+    if (tasks.cocina) badges.push('<span class="wa-badge wa-badge-cocina">Cocina-Pasillo</span>');
     if (tasks.basura) badges.push('<span class="wa-badge wa-badge-basura">Basura</span>');
     if (!badges.length) return '';
     return `<span class="wa-task-badges">${badges.join('')}</span>`;
@@ -1494,6 +1495,92 @@
     if (out) out.textContent = text;
   };
 
+  const resolveTaskMapsForDate = (fechaYmd) => {
+    const monthKey = fechaYmd.slice(0, 7);
+    const day = parseInt(fechaYmd.slice(8, 10), 10);
+    const meta = getMonthMeta(monthKey);
+    const basuraMap = buildBasuraPorDia(state, meta, monthKey);
+    const aseoMap = buildAseoRecepcionPorDia(state, meta, monthKey, basuraMap);
+    const cocinaMap = buildCocinaRecepcionPorDia(state, meta, monthKey, basuraMap, aseoMap);
+    return { day, aseoMap, cocinaMap, basuraMap };
+  };
+
+  const resolveEmpIdForTaskOnDate = (task, fechaYmd) => {
+    const { day, aseoMap, cocinaMap, basuraMap } = resolveTaskMapsForDate(fechaYmd);
+    if (task === 'ASEO_RECEPCION') return aseoMap[day] || null;
+    if (task === 'COCINA_RECEPCION') return cocinaMap[day] || null;
+    if (task === 'SACAR_BASURA') return basuraMap[day] || null;
+    return null;
+  };
+
+  const resolvePhoneForEmpId = async (empId) => {
+    if (!empId) return '';
+    const raw = String(listQueryPhoneInput(empId)?.value || '').trim();
+    if (raw) return normalizeWhatsAppPhone(raw);
+    const db = window.almuerzoDb;
+    if (!db) return '';
+    try {
+      const doc = await db.collection(COL_PHONES).doc(empId).get();
+      return normalizeWhatsAppPhone(doc.data()?.phone || '');
+    } catch {
+      return '';
+    }
+  };
+
+  const sendWhatsAppViaProxy = async (phone, task, fecha) => {
+    setStatus('Enviando WhatsApp…', '');
+    try {
+      const res = await fetch(WHATSAPP_TEST_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, task, date: fecha }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setStatus(data.error || data.render?.error || 'Error WhatsApp.', 'err');
+        setWaPreview(JSON.stringify(data, null, 2));
+        return data;
+      }
+      setStatus(`WhatsApp OK — ${formatPhoneForInput(phone)} (${task})`, 'ok');
+      setWaPreview(JSON.stringify(data, null, 2));
+      return data;
+    } catch (e) {
+      console.error(e);
+      setStatus('Error de red al enviar WhatsApp.', 'err');
+      return null;
+    }
+  };
+
+  const previewTaskLocal = async (task, fecha) => {
+    if (task !== 'COCINA_RECEPCION') return null;
+    const empId = resolveEmpIdForTaskOnDate(task, fecha);
+    const phone = await resolvePhoneForEmpId(empId);
+    return {
+      empId: empId || null,
+      phone: phone || null,
+      reason: empId ? (phone ? null : 'sin teléfono en empleadosTelefonos') : 'sin cocina asignada ese día',
+    };
+  };
+
+  const sendPlanillaWhatsApp = async (task) => {
+    const fecha = el('testWaFecha')?.value || fechaHoyInput();
+    if (task === 'COCINA_RECEPCION') {
+      const empId = resolveEmpIdForTaskOnDate(task, fecha);
+      const phone = await resolvePhoneForEmpId(empId);
+      if (!empId) {
+        setStatus('No hay cocina asignada ese día en la planilla.', 'warn');
+        return;
+      }
+      if (!phone) {
+        setStatus(`Sin teléfono para ${empNameById(empId)} (cocina del día).`, 'warn');
+        return;
+      }
+      await sendWhatsAppViaProxy(phone, task, fecha);
+      return;
+    }
+    void callProbarWhatsApp({ accion: 'enviar', task, fecha, force: '1' });
+  };
+
   const callProbarWhatsApp = async (params) => {
     const url = new URL(CF_PROBAR_WA);
     Object.entries(params).forEach(([k, v]) => {
@@ -1553,6 +1640,8 @@
     setStatus('Vista previa…', '');
     try {
       const fetchPreview = async (task) => {
+        const local = await previewTaskLocal(task, fecha);
+        if (local) return local;
         const url = new URL(CF_PROBAR_WA);
         url.searchParams.set('accion', 'preview');
         url.searchParams.set('task', task);
@@ -1572,7 +1661,7 @@
         `  ${aseo?.empId || '—'} · ${formatPhoneForInput(aseo?.phone) || 'sin teléfono'}`,
         aseo?.reason ? `  ${aseo.reason}` : '',
         '',
-        'COCINA_RECEPCION (9:00):',
+        'COCINA — Aseo Cocina-Pasillo (9:00):',
         `  ${cocina?.empId || '—'} · ${formatPhoneForInput(cocina?.phone) || 'sin teléfono'}`,
         cocina?.reason ? `  ${cocina.reason}` : '',
         '',
@@ -1599,8 +1688,8 @@
       setStatus('Selecciona un contacto con teléfono.', 'warn');
       return;
     }
-    void callProbarWhatsApp({ accion: 'direct', phone, task, fecha });
-    setWaPreview(`Enviando prueba ${task} a ${name}\nTel: ${formatPhoneForInput(phone)}\nFecha: ${fecha}`);
+    void sendWhatsAppViaProxy(phone, task, fecha);
+    setWaPreview(`Enviando ${task} a ${name}\nTel: ${formatPhoneForInput(phone)}\nFecha: ${fecha}`);
   };
 
   const sendPruebaWhatsApp = (task) => {
@@ -1611,7 +1700,7 @@
       setStatus('Ingresa el teléfono de PRUEBA y guarda antes de enviar.', 'warn');
       return;
     }
-    void callProbarWhatsApp({ accion: 'direct', phone, task, fecha });
+    void sendWhatsAppViaProxy(phone, task, fecha);
     setWaPreview(`Enviando ${task} a PRUEBA\nTel: ${formatPhoneForInput(phone)}\nFecha: ${fecha}`);
   };
 
@@ -1652,18 +1741,9 @@
 
     el('btnSaveWhatsAppPhones')?.addEventListener('click', () => { void saveWhatsAppPhones(); });
     el('btnWaPreview')?.addEventListener('click', () => { void previewWhatsAppDia(); });
-    el('btnWaEnviarAseo')?.addEventListener('click', () => {
-      const fecha = el('testWaFecha')?.value || fechaHoyInput();
-      void callProbarWhatsApp({ accion: 'enviar', task: 'ASEO_RECEPCION', fecha, force: '1' });
-    });
-    el('btnWaEnviarCocina')?.addEventListener('click', () => {
-      const fecha = el('testWaFecha')?.value || fechaHoyInput();
-      void callProbarWhatsApp({ accion: 'enviar', task: 'COCINA_RECEPCION', fecha, force: '1' });
-    });
-    el('btnWaEnviarBasura')?.addEventListener('click', () => {
-      const fecha = el('testWaFecha')?.value || fechaHoyInput();
-      void callProbarWhatsApp({ accion: 'enviar', task: 'SACAR_BASURA', fecha, force: '1' });
-    });
+    el('btnWaEnviarAseo')?.addEventListener('click', () => { void sendPlanillaWhatsApp('ASEO_RECEPCION'); });
+    el('btnWaEnviarCocina')?.addEventListener('click', () => { void sendPlanillaWhatsApp('COCINA_RECEPCION'); });
+    el('btnWaEnviarBasura')?.addEventListener('click', () => { void sendPlanillaWhatsApp('SACAR_BASURA'); });
     el('btnWaSendDirect')?.addEventListener('click', sendDirectWhatsAppTest);
     el('btnWaPruebaAseo')?.addEventListener('click', () => sendPruebaWhatsApp('ASEO_RECEPCION'));
     el('btnWaPruebaCocina')?.addEventListener('click', () => sendPruebaWhatsApp('COCINA_RECEPCION'));

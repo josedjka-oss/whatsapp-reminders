@@ -26,7 +26,7 @@ const TASK_META: Record<
     timeLabel: "9:00 a.m.",
   },
   COCINA_RECEPCION: {
-    label: "Cocina Recepción",
+    label: "Aseo Cocina-Pasillo",
     timeLabel: "9:00 a.m.",
   },
   SACAR_BASURA: {
