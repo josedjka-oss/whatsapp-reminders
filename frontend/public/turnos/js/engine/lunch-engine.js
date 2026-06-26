@@ -83,12 +83,19 @@
   };
 
   /**
-   * Santiago / Miguel / Juan lun–vie:
-   * Juan = misma hora que Jhonny; Santiago y Miguel en franjas distintas (12/1/2).
+   * Santiago / Miguel / Juan:
+   * Juan = misma hora que Jhonny (lun–vie y sáb); S/M en franjas distintas.
    */
   const getLunchSantiagoMiguelJuan = (state, d, monthKey, meta) => {
     if (d.esSabado) {
-      return assignTrioSabadoLunch(TRIO_SANTIAGO_MIGUEL_JUAN, d, meta);
+      const juanLunch = assignDuoSabadoLunch(DUO_JHONNY_CRISTIAN, d, meta)[JHONNY_ID];
+      const out = { [JUAN_ID]: juanLunch };
+      const remaining = ALMUERZOS_SABADO.filter((f) => f !== juanLunch);
+      const ordered = [...DUO_SM].sort((a, b) => DUO_SM.indexOf(a) - DUO_SM.indexOf(b));
+      const flip = (hashDia(monthKey, d, 'smj-sab') ^ d.day) & 1;
+      out[ordered[0]] = flip ? remaining[1] : remaining[0];
+      out[ordered[1]] = flip ? remaining[0] : remaining[1];
+      return out;
     }
 
     const juanLunch = getJhonnyCristianLunch(d, monthKey, meta)[JHONNY_ID];
@@ -255,7 +262,11 @@
   /** Almuerzo calculado por motor: no conservar overrides heredados de Firebase. */
   const isAutoComputedLunch = (empId, d) => {
     if (!d || d.noLaborable) return false;
-    if (d.esSabado) return isSaturdayAutoLunch(empId, d);
+    if (d.esSabado) {
+      if (isSaturdayAutoLunch(empId, d)) return true;
+      if (almuerzoFijoSemana(empId)) return true;
+      return false;
+    }
     if (GRUPO_MENSAJEROS.includes(empId)) return true;
     if (TRIO_SANTIAGO_MIGUEL_JUAN.includes(empId)) return true;
     if (TRIO_DESPACHO.includes(empId)) return true;
