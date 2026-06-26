@@ -53,6 +53,34 @@
   const isEntradaDiez = (v) => normAm({ am: v }) === '10';
   const isSalidaCinco = (v) => normPm({ pm: v }) === '5';
 
+  /** Normaliza am guardado en state (9 · 10 · 930) para elegibilidad aseo/basura. */
+  const normalizeCellAm = (raw) => {
+    const v = String(raw ?? '').trim();
+    if (v === '') return '';
+    if (esAusenteEntradaCeroRaw(v)) return '0';
+    const parsed = normAm({ am: v });
+    if (parsed === null) return v;
+    if (parsed === 9.5 || isEntradaSabado(v)) return CFG.AM_SABADO;
+    if (parsed === 10) return '10';
+    if (parsed === 9) return '9';
+    return v;
+  };
+
+  const normalizeCellPm = (raw) => {
+    const v = String(raw ?? '').trim();
+    if (v === '') return '';
+    const parsed = normPm({ pm: v });
+    if (parsed === 17) return '5';
+    if (parsed === 18) return '6';
+    return v;
+  };
+
+  /** Recalcula aseo/basura (dependen de am/pm actuales) y repinta. */
+  const refreshAseoBasuraFromDom = () => {
+    collectFromDom();
+    render(true);
+  };
+
   const { buildAseoRecepcionPorDia, isAseoRecepcionDia, horaAseoRecepcion } = window.ENGINE_RECEPCION_ASEO;
   const { buildBasuraPorDia, isBasuraSacadaDia }         = window.ENGINE_SACADA_BASURA;
 
@@ -344,7 +372,10 @@
         if (esAusenteEntradaCeroRaw(amRaw)) {
           state.cells[emp.id][day] = { am: '0', pm: '' };
         } else {
-          state.cells[emp.id][day] = { am: amRaw, pm: pmRaw };
+          state.cells[emp.id][day] = {
+            am: normalizeCellAm(amRaw),
+            pm: normalizeCellPm(pmRaw),
+          };
         }
 
         const lunchIn = q(`input[data-cell="${emp.id}-${day}-lunch"]`);
@@ -553,8 +584,11 @@
   const attachListeners = (wrap, monthKey) => {
     if (READ_ONLY) return;
 
-    // Edición manual am/pm — trío/dúos reparan días siguientes
+    // Edición manual am/pm — trío/dúos reparan días siguientes; am/pm recalcula aseo/basura
     wrap.querySelectorAll('.cell-in:not(.cell-in-lunch)').forEach((inp) => {
+      inp.addEventListener('change', () => {
+        refreshAseoBasuraFromDom();
+      });
       inp.addEventListener('blur', (ev) => {
         const raw = ev.target?.getAttribute('data-cell') || '';
         const m = /^(.+)-(\d+)-(am|pm)$/.exec(raw);

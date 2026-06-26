@@ -5,6 +5,7 @@
  * Asignación mensual de aseo de recepción (lun–vie 9:00, sáb 9:30).
 
  * Solo quien entra a las 9 (entre semana) o 9:30 (sábado) ese día; rotación equitativa.
+ * Se recalcula en cada render según state.cells (p. ej. si am pasa de 9 a 10, pierde aseo).
 
  */
 
