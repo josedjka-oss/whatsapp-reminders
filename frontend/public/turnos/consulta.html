@@ -172,7 +172,7 @@
       line-height: 1.2;
     }
     .page-legend-mobile .leg-aseo { background: #e1bee7; color: #4a148c; border: 1px solid #7b1fa2; }
-    .page-legend-mobile .leg-cocina { background: #ffe0b2; color: #bf360c; border: 1px solid #e65100; }
+    .page-legend-mobile .leg-cocina { background: #bbdefb; color: #0d47a1; border: 1px solid #1565c0; }
     .page-legend-mobile .leg-basura { background: #c8e6c9; color: #1b5e20; border: 1px solid #2e7d32; }
     .page-legend-mobile .leg-ajuste { background: #fff9c4; color: #795548; border: 1px solid #fbc02d; }
 
@@ -428,8 +428,8 @@
     }
 
     td.celda-cocina-recepcion {
-      background: #ffe0b2 !important;
-      box-shadow: inset 0 0 0 2px #e65100;
+      background: #bbdefb !important;
+      box-shadow: inset 0 0 0 2px #1565c0;
       padding: 1px 2px !important;
       text-align: center;
       vertical-align: middle;
@@ -447,15 +447,15 @@
       display: block;
       font-size: 7px;
       font-weight: 800;
-      color: #bf360c;
+      color: #0d47a1;
       line-height: 1;
       pointer-events: none;
       user-select: none;
     }
     td.celda-cocina-recepcion .cell-in {
-      background: #ffcc80;
+      background: #90caf9;
       font-weight: 800;
-      color: #bf360c;
+      color: #0d47a1;
       width: 26px;
       margin: 0;
     }
@@ -802,7 +802,7 @@
   </p>
   <div class="page-legend-mobile" aria-label="Leyenda de colores">
     <span class="leg leg-aseo">Morado = aseo 9h</span>
-    <span class="leg leg-cocina">Naranja = cocina 9h</span>
+    <span class="leg leg-cocina">Azul = cocina 9h</span>
     <span class="leg leg-basura">Verde = basura 18h</span>
     <span class="leg leg-ajuste">Amarillo = 10 / 17h</span>
   </div>
@@ -830,25 +830,25 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Motor de horarios (orden obligatorio) -->
-<script src="js/engine/constants.js?v=20260616d"></script>
-<script src="js/engine/calendar.js?v=20260616d"></script>
-<script src="js/engine/hours.js?v=20260616d"></script>
-<script src="js/engine/cell-mutation.js?v=20260616d"></script>
-<script src="js/engine/recepcion-aseo.js?v=20260616d"></script>
-<script src="js/engine/recepcion-cocina.js?v=20260616d"></script>
-<script src="js/engine/sacada-basura.js?v=20260616d"></script>
-<script src="js/engine/lunch-sabado.js?v=20260616d"></script>
-<script src="js/engine/rules-messengers.js?v=20260616d"></script>
-<script src="js/engine/rules-duos.js?v=20260616d"></script>
-<script src="js/engine/rules-johnny.js?v=20260616d"></script>
-<script src="js/engine/cap-engine.js?v=20260616d"></script>
-<script src="js/engine/scheduler.js?v=20260616d"></script>
-<script src="js/engine/lunch-engine.js?v=20260616d"></script>
-<script src="js/engine/validator.js?v=20260616d"></script>
+<script src="js/engine/constants.js?v=20260616e"></script>
+<script src="js/engine/calendar.js?v=20260616e"></script>
+<script src="js/engine/hours.js?v=20260616e"></script>
+<script src="js/engine/cell-mutation.js?v=20260616e"></script>
+<script src="js/engine/recepcion-aseo.js?v=20260616e"></script>
+<script src="js/engine/recepcion-cocina.js?v=20260616e"></script>
+<script src="js/engine/sacada-basura.js?v=20260616e"></script>
+<script src="js/engine/lunch-sabado.js?v=20260616e"></script>
+<script src="js/engine/rules-messengers.js?v=20260616e"></script>
+<script src="js/engine/rules-duos.js?v=20260616e"></script>
+<script src="js/engine/rules-johnny.js?v=20260616e"></script>
+<script src="js/engine/cap-engine.js?v=20260616e"></script>
+<script src="js/engine/scheduler.js?v=20260616e"></script>
+<script src="js/engine/lunch-engine.js?v=20260616e"></script>
+<script src="js/engine/validator.js?v=20260616e"></script>
 
 <!-- Orquestador principal (solo consulta) -->
 <script>window.TURNOS_READ_ONLY = true;</script>
-<script src="js/turnos.js?v=20260616d"></script>
+<script src="js/turnos.js?v=20260616e"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>
