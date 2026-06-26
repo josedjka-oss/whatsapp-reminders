@@ -497,8 +497,8 @@
 
     const meta        = getMonthMeta(monthKey);
     const chunks      = buildWeekChunks(meta);
-    const aseoMap      = buildAseoRecepcionPorDia(state, meta, monthKey);
     const basuraMap    = buildBasuraPorDia(state, meta, monthKey);
+    const aseoMap      = buildAseoRecepcionPorDia(state, meta, monthKey, basuraMap);
     const wrap        = el('sheetWrap');
     if (!wrap) return;
 

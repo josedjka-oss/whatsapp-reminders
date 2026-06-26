@@ -20,6 +20,7 @@
     'jhon_lozano',
     'jesus_perez',
     'brayan_ramirez',
+    'brandon',
   ];
 
   const puedeSacarBasura = (pmVal) => normPm({ pm: pmVal }) !== '5';

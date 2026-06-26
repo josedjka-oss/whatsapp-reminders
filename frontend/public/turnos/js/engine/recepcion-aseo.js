@@ -80,7 +80,7 @@
 
    */
 
-  const buildAseoRecepcionPorDia = (state, meta, monthKey) => {
+  const buildAseoRecepcionPorDia = (state, meta, monthKey, basuraMap = null) => {
 
     const map    = {};
 
@@ -101,13 +101,12 @@
 
 
     days.forEach((d) => {
+      const basuraEmp = basuraMap?.[d.day] ?? basuraMap?.[String(d.day)] ?? null;
 
       const eligible = ASEO_RECEPCION_IDS.filter((id) => {
-
+        if (basuraEmp && id === basuraEmp) return false;
         const am = state.cells[id]?.[d.day]?.am;
-
         return isEntradaAseoElegible(am, d.esSabado);
-
       });
 
       if (!eligible.length) return;
