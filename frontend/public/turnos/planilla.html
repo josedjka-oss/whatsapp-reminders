@@ -800,6 +800,12 @@
       padding: 5px 10px;
       font-size: 11.5px;
     }
+    .btn-test-cocina {
+      background: #1976d2;
+      color: #fff;
+      padding: 5px 10px;
+      font-size: 11.5px;
+    }
     .wa-phone-row {
       display: flex;
       flex-wrap: wrap;
@@ -811,10 +817,35 @@
     }
     .wa-phone-row:last-child { border-bottom: none; }
     .wa-phone-name {
-      flex: 1 1 140px;
+      flex: 1 1 120px;
       font-weight: 600;
       font-size: 0.85rem;
     }
+    .wa-task-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex: 0 1 auto;
+    }
+    .wa-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .wa-badge-aseo { background: #e1bee7; color: #4a148c; border: 1px solid #7b1fa2; }
+    .wa-badge-cocina { background: #bbdefb; color: #0d47a1; border: 1px solid #1565c0; }
+    .wa-badge-basura { background: #c8e6c9; color: #1b5e20; border: 1px solid #2e7d32; }
+    .wa-phone-name-fixed { color: #e65100; }
+    .wa-pinned-note {
+      font-size: 0.7rem;
+      color: #666;
+      flex: 0 0 auto;
+    }
+    .wa-phone-row-pinned { background: #fff8e1; border-radius: 4px; padding: 6px 4px; }
     .wa-phone-input {
       flex: 1 1 160px;
       min-width: 140px;
@@ -950,16 +981,30 @@
 </details>
 
 <details class="test-v8-panel" id="panelWhatsApp">
-  <summary>Teléfonos y pruebas WhatsApp (aseo / basura)</summary>
+  <summary>Teléfonos y pruebas WhatsApp (aseo / cocina / basura)</summary>
   <div class="wa-panel-body">
   <p class="test-v8-note">
-    Los números deben existir como <strong>Contact</strong> en la app de WhatsApp (Render).
-    Firebase solo envía <code>phone</code> + <code>task</code> + <code>date</code>; el texto lo arma Render.
-    Schedulers: aseo <strong>9:00</strong> · basura <strong>18:00</strong> (lun/mié/vie).
+    Asigna el número de cada empleado (formato <strong>+57…</strong>). Al guardar se almacenan en Firebase
+    y se registran como contacto en Render (requerido para enviar).
+    Los números deben existir en WhatsApp. Schedulers: aseo/cocina <strong>9:00</strong> · basura <strong>18:00</strong> (lun/mié/vie).
   </p>
-  <p class="wa-section-title">Empleados planilla (aseo / basura)</p>
+  <p class="wa-section-title">Empleados (aseo · cocina · basura)</p>
   <div id="whatsappPhonesList" aria-label="Teléfonos empleados aseo y basura"></div>
-  <p class="wa-section-title">Contactos adicionales (pruebas)</p>
+  <p class="wa-section-title">Contacto PRUEBA (fijo)</p>
+  <div id="whatsappPruebaList" aria-label="Teléfono contacto PRUEBA"></div>
+  <p class="wa-section-title">Enviar prueba a contacto PRUEBA</p>
+  <div class="test-v8-row">
+    <button type="button" class="btn btn-test-on" id="btnWaPruebaAseo" aria-label="Enviar aseo a contacto PRUEBA">
+      PRUEBA → ASEO
+    </button>
+    <button type="button" class="btn btn-test-cocina" id="btnWaPruebaCocina" aria-label="Enviar cocina a contacto PRUEBA">
+      PRUEBA → COCINA
+    </button>
+    <button type="button" class="btn btn-test-plan" id="btnWaPruebaBasura" aria-label="Enviar basura a contacto PRUEBA">
+      PRUEBA → BASURA
+    </button>
+  </div>
+  <p class="wa-section-title">Contactos adicionales (opcional)</p>
   <div id="whatsappCustomList" aria-label="Contactos adicionales para pruebas"></div>
   <div class="test-v8-row">
     <button type="button" class="btn btn-secondary" id="btnWaAddCustom" aria-label="Agregar contacto de prueba">
@@ -983,6 +1028,9 @@
     <button type="button" class="btn btn-test-on" id="btnWaEnviarAseo" aria-label="Enviar orden WhatsApp aseo recepción">
       Enviar ASEO (planilla)
     </button>
+    <button type="button" class="btn btn-test-cocina" id="btnWaEnviarCocina" aria-label="Enviar orden WhatsApp cocina recepción">
+      Enviar COCINA (planilla)
+    </button>
     <button type="button" class="btn btn-test-plan" id="btnWaEnviarBasura" aria-label="Enviar orden WhatsApp sacar basura">
       Enviar BASURA (planilla)
     </button>
@@ -996,6 +1044,7 @@
     <label for="waTestTaskSelect">Tarea</label>
     <select id="waTestTaskSelect" class="wa-test-select" aria-label="Tipo de tarea WhatsApp">
       <option value="ASEO_RECEPCION">ASEO_RECEPCION</option>
+      <option value="COCINA_RECEPCION">COCINA_RECEPCION</option>
       <option value="SACAR_BASURA">SACAR_BASURA</option>
     </select>
   </div>
@@ -1026,25 +1075,25 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Motor de horarios (orden obligatorio) -->
-<script src="js/engine/constants.js?v=20260616f"></script>
-<script src="js/engine/calendar.js?v=20260616f"></script>
-<script src="js/engine/hours.js?v=20260616f"></script>
-<script src="js/engine/cell-mutation.js?v=20260616f"></script>
-<script src="js/engine/recepcion-aseo.js?v=20260616f"></script>
-<script src="js/engine/recepcion-cocina.js?v=20260616f"></script>
-<script src="js/engine/sacada-basura.js?v=20260616f"></script>
-<script src="js/engine/lunch-sabado.js?v=20260616f"></script>
-<script src="js/engine/rules-messengers.js?v=20260616f"></script>
-<script src="js/engine/rules-duos.js?v=20260616f"></script>
-<script src="js/engine/rules-johnny.js?v=20260616f"></script>
-<script src="js/engine/cap-engine.js?v=20260616f"></script>
-<script src="js/engine/scheduler.js?v=20260616f"></script>
-<script src="js/engine/lunch-engine.js?v=20260616f"></script>
-<script src="js/engine/validator.js?v=20260616f"></script>
+<script src="js/engine/constants.js?v=20260616h"></script>
+<script src="js/engine/calendar.js?v=20260616h"></script>
+<script src="js/engine/hours.js?v=20260616h"></script>
+<script src="js/engine/cell-mutation.js?v=20260616h"></script>
+<script src="js/engine/recepcion-aseo.js?v=20260616h"></script>
+<script src="js/engine/recepcion-cocina.js?v=20260616h"></script>
+<script src="js/engine/sacada-basura.js?v=20260616h"></script>
+<script src="js/engine/lunch-sabado.js?v=20260616h"></script>
+<script src="js/engine/rules-messengers.js?v=20260616h"></script>
+<script src="js/engine/rules-duos.js?v=20260616h"></script>
+<script src="js/engine/rules-johnny.js?v=20260616h"></script>
+<script src="js/engine/cap-engine.js?v=20260616h"></script>
+<script src="js/engine/scheduler.js?v=20260616h"></script>
+<script src="js/engine/lunch-engine.js?v=20260616h"></script>
+<script src="js/engine/validator.js?v=20260616h"></script>
 
 <!-- Orquestador principal -->
-<script src="js/turnos-auth.js?v=20260616f"></script>
-<script src="js/turnos.js?v=20260616f"></script>
+<script src="js/turnos-auth.js?v=20260616h"></script>
+<script src="js/turnos.js?v=20260616h"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>

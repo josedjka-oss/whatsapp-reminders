@@ -167,6 +167,23 @@
   /** Almuerzo fijo todos los días (Mauricio 1:00 · Brayan Y 3:00 · incluye sábado). */
   const almuerzoFijoSemana = (empId) => ALMUERZO_FIJO[empId] ?? null;
 
+  /**
+   * Teléfonos WhatsApp por empleado (aseo / cocina / basura).
+   * Firebase (empleadosTelefonos) sobrescribe al guardar desde la planilla.
+   * Formato: +573001234567 o whatsapp:+573001234567
+   */
+  const EMPLEADOS_WHATSAPP_DEFAULT = {
+    harold_paipa:      '',
+    diego_lozano:      '',
+    dilan_toro:        '',
+    santiago_guarnizo: '',
+    brandon:           '',
+    cristian_uribe:    '',
+    jhon_lozano:       '',
+    jesus_perez:       '',
+    brayan_ramirez:    '',
+  };
+
   const RESTRICCIONES_AJUSTE = {
     'harold_paipa':      { puedeEntrarDiez: true,  puedeSalirCinco: true  },
     'diego_lozano':      { puedeEntrarDiez: true,  puedeSalirCinco: true  },
@@ -235,6 +252,7 @@
     IDS_TURNO,
     ALMUERZO_FIJO,
     almuerzoFijoSemana,
+    EMPLEADOS_WHATSAPP_DEFAULT,
     RESTRICCIONES_AJUSTE,
     ALMUERZOS_MENSAJEROS,
     ALMUERZOS_SABADO,

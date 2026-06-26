@@ -15,7 +15,7 @@ const router = Router();
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 
-type TaskKind = "ASEO_RECEPCION" | "SACAR_BASURA";
+type TaskKind = "ASEO_RECEPCION" | "COCINA_RECEPCION" | "SACAR_BASURA";
 
 const TASK_META: Record<
   TaskKind,
@@ -23,6 +23,10 @@ const TASK_META: Record<
 > = {
   ASEO_RECEPCION: {
     label: "Aseo Recepción",
+    timeLabel: "9:00 a.m.",
+  },
+  COCINA_RECEPCION: {
+    label: "Cocina Recepción",
     timeLabel: "9:00 a.m.",
   },
   SACAR_BASURA: {
@@ -70,6 +74,9 @@ const normalizeTaskKind = (raw: unknown): TaskKind | null => {
   if (s === "ASEO_RECEPCION" || s === "ASEO" || s === "RECEPCION") {
     return "ASEO_RECEPCION";
   }
+  if (s === "COCINA_RECEPCION" || s === "COCINA") {
+    return "COCINA_RECEPCION";
+  }
   if (s === "SACAR_BASURA" || s === "BASURA") {
     return "SACAR_BASURA";
   }
@@ -100,7 +107,7 @@ const buildIntegratedReminderBody = (
  *
  * Body JSON obligatorio:
  *  - phone o to — debe existir en tabla Contact en esta aplicación (mismo formato que /api/contacts)
- *  - task o tipo o kind — ASEO_RECEPCION | SACAR_BASURA (aliases: ASEo, BASURA, …)
+ *  - task o tipo o kind — ASEO_RECEPCION | COCINA_RECEPCION | SACAR_BASURA (aliases: ASEO, COCINA, BASURA, …)
  *
  * Opcional:
  *  - date o dia o referenceDate — yyyy-MM-DD (fecha a mostrar; por defecto hoy en APP_TIMEZONE)
@@ -161,7 +168,7 @@ router.post(
       if (!taskKind) {
         return res.status(400).json({
           error:
-            'Falta "task" válido (o "tipo" / "kind"): ASEO_RECEPCION o SACAR_BASURA.',
+            'Falta "task" válido (o "tipo" / "kind"): ASEO_RECEPCION, COCINA_RECEPCION o SACAR_BASURA.',
         });
       }
 

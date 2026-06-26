@@ -1133,6 +1133,8 @@
   // ── WHATSAPP — TELÉFONOS Y PRUEBAS ───────────────────────────────────────
 
   const CF_PROBAR_WA = 'https://us-central1-cajacentro-v6.cloudfunctions.net/probarWhatsAppTareas';
+  const WHATSAPP_RENDER_API = 'https://whatsapp-reminders-mzex.onrender.com';
+  const WA_CONTACT_PRUEBA = { id: 'custom_prueba', name: 'PRUEBA' };
 
   const escapeHtml = (s) => String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -1140,11 +1142,63 @@
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+  const whatsappTasksForEmp = (empId) => {
+    const aseo = window.ENGINE_RECEPCION_ASEO?.ASEO_RECEPCION_IDS || [];
+    const cocina = window.ENGINE_RECEPCION_COCINA?.COCINA_RECEPCION_IDS || [];
+    const basura = window.ENGINE_SACADA_BASURA?.BASURA_SACADA_IDS || [];
+    return {
+      aseo: aseo.includes(empId),
+      cocina: cocina.includes(empId),
+      basura: basura.includes(empId),
+    };
+  };
+
   const whatsappEmpIds = () => {
     const aseo = window.ENGINE_RECEPCION_ASEO?.ASEO_RECEPCION_IDS || [];
     const cocina = window.ENGINE_RECEPCION_COCINA?.COCINA_RECEPCION_IDS || [];
     const basura = window.ENGINE_SACADA_BASURA?.BASURA_SACADA_IDS || [];
-    return [...new Set([...aseo, ...cocina, ...basura])];
+    const ids = [...new Set([...aseo, ...cocina, ...basura])];
+    const order = Object.keys(window.ENGINE_CONSTANTS?.EMPLEADOS_WHATSAPP_DEFAULT || {});
+    if (!order.length) return ids;
+    return [...ids].sort((a, b) => {
+      const ia = order.indexOf(a);
+      const ib = order.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+  };
+
+  const formatPhoneForInput = (stored) => {
+    let s = String(stored || '').trim();
+    if (s.startsWith('whatsapp:')) s = s.slice('whatsapp:'.length);
+    return s;
+  };
+
+  const normalizeWhatsAppPhone = (raw) => {
+    let s = String(raw || '').trim();
+    if (!s) return '';
+    if (s.startsWith('whatsapp:')) s = s.slice('whatsapp:'.length);
+    const digits = s.replace(/\D/g, '');
+    if (!digits) return '';
+    if (s.startsWith('+') || digits.length > 10) {
+      return `whatsapp:+${digits}`;
+    }
+    return `whatsapp:+57${digits}`;
+  };
+
+  const defaultWhatsAppPhone = (empId) =>
+    formatPhoneForInput(window.ENGINE_CONSTANTS?.EMPLEADOS_WHATSAPP_DEFAULT?.[empId] || '');
+
+  const renderWhatsAppTaskBadges = (empId) => {
+    const tasks = whatsappTasksForEmp(empId);
+    const badges = [];
+    if (tasks.aseo) badges.push('<span class="wa-badge wa-badge-aseo">Aseo</span>');
+    if (tasks.cocina) badges.push('<span class="wa-badge wa-badge-cocina">Cocina</span>');
+    if (tasks.basura) badges.push('<span class="wa-badge wa-badge-basura">Basura</span>');
+    if (!badges.length) return '';
+    return `<span class="wa-task-badges">${badges.join('')}</span>`;
   };
 
   const empNameById = (empId) => {
@@ -1153,14 +1207,35 @@
   };
 
   const isCustomContactId = (id) => String(id || '').startsWith('custom_');
+  const isPinnedCustomId = (id) => id === WA_CONTACT_PRUEBA.id;
+
+  const renderPruebaContactRow = (contact = {}) => {
+    const phone = formatPhoneForInput(contact.phone || '');
+    return `
+      <div class="wa-phone-row wa-phone-row-pinned" data-wa-row="custom" data-wa-id="${WA_CONTACT_PRUEBA.id}" data-wa-pinned="true">
+        <span class="wa-phone-name wa-phone-name-fixed">${escapeHtml(WA_CONTACT_PRUEBA.name)}</span>
+        <span class="wa-task-badges">
+          <span class="wa-badge wa-badge-aseo">Aseo</span>
+          <span class="wa-badge wa-badge-cocina">Cocina</span>
+          <span class="wa-badge wa-badge-basura">Basura</span>
+        </span>
+        <input type="tel" class="wa-phone-input" data-wa-phone="${WA_CONTACT_PRUEBA.id}"
+          value="${escapeHtml(phone)}" placeholder="+573001234567" autocomplete="tel"
+          aria-label="Teléfono WhatsApp contacto PRUEBA" />
+        <span class="wa-pinned-note">Fijo · pruebas manuales</span>
+      </div>
+    `;
+  };
 
   const renderPlanillaPhoneRows = () => {
     const list = el('whatsappPhonesList');
     if (!list) return;
     list.innerHTML = whatsappEmpIds().map((empId) => `
-      <div class="wa-phone-row" data-wa-row="planilla">
+      <div class="wa-phone-row" data-wa-row="planilla" data-wa-emp="${escapeHtml(empId)}">
         <span class="wa-phone-name">${escapeHtml(empNameById(empId))}</span>
+        ${renderWhatsAppTaskBadges(empId)}
         <input type="tel" class="wa-phone-input" data-wa-phone="${empId}"
+          value="${escapeHtml(defaultWhatsAppPhone(empId))}"
           placeholder="+573001234567" autocomplete="tel"
           aria-label="Teléfono WhatsApp ${escapeHtml(empNameById(empId))}" />
       </div>
@@ -1168,6 +1243,7 @@
   };
 
   const renderCustomContactRow = (contact = {}) => {
+    if (contact.id === WA_CONTACT_PRUEBA.id) return renderPruebaContactRow(contact);
     const id = contact.id || `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     return `
       <div class="wa-phone-row" data-wa-row="custom" data-wa-id="${escapeHtml(id)}">
@@ -1175,7 +1251,7 @@
           value="${escapeHtml(contact.name || '')}" placeholder="Nombre"
           aria-label="Nombre contacto adicional" />
         <input type="tel" class="wa-phone-input" data-wa-phone="${escapeHtml(id)}"
-          value="${escapeHtml(contact.phone || '')}" placeholder="+573001234567" autocomplete="tel"
+          value="${escapeHtml(formatPhoneForInput(contact.phone || ''))}" placeholder="+573001234567" autocomplete="tel"
           aria-label="Teléfono contacto adicional" />
         <button type="button" class="wa-btn-remove" data-wa-remove="${escapeHtml(id)}"
           aria-label="Eliminar contacto">Quitar</button>
@@ -1190,10 +1266,22 @@
     syncWhatsAppContactSelect();
   };
 
-  const renderCustomContactRows = (contacts = []) => {
+  const renderPruebaContact = (contact = {}) => {
+    const list = el('whatsappPruebaList');
+    if (!list) return;
+    list.innerHTML = renderPruebaContactRow(contact);
+  };
+
+  const renderCustomContactRows = (contacts = [], prueba = null) => {
+    const pruebaData = prueba
+      || contacts.find((c) => c.id === WA_CONTACT_PRUEBA.id)
+      || WA_CONTACT_PRUEBA;
+    renderPruebaContact(pruebaData);
+
     const list = el('whatsappCustomList');
     if (!list) return;
-    list.innerHTML = contacts.map((c) => renderCustomContactRow(c)).join('');
+    const others = contacts.filter((c) => c.id !== WA_CONTACT_PRUEBA.id);
+    list.innerHTML = others.map((c) => renderCustomContactRow(c)).join('');
     syncWhatsAppContactSelect();
   };
 
@@ -1207,16 +1295,53 @@
   const collectContactsFromDom = () => {
     const contacts = [];
     whatsappEmpIds().forEach((empId) => {
-      const phone = String(listQueryPhoneInput(empId)?.value || '').trim();
+      const raw = String(listQueryPhoneInput(empId)?.value || '').trim();
+      const phone = normalizeWhatsAppPhone(raw);
       if (phone) contacts.push({ id: empId, name: empNameById(empId), phone, custom: false });
     });
     document.querySelectorAll('[data-wa-row="custom"]').forEach((row) => {
       const id = row.getAttribute('data-wa-id');
-      const name = String(row.querySelector('[data-wa-name]')?.value || '').trim();
-      const phone = String(row.querySelector('[data-wa-phone]')?.value || '').trim();
-      if (id && (name || phone)) contacts.push({ id, name: name || id, phone, custom: true });
+      const pinned = row.getAttribute('data-wa-pinned') === 'true';
+      const name = pinned
+        ? WA_CONTACT_PRUEBA.name
+        : String(row.querySelector('[data-wa-name]')?.value || '').trim();
+      const raw = String(row.querySelector('[data-wa-phone]')?.value || '').trim();
+      const phone = normalizeWhatsAppPhone(raw);
+      if (id && (name || phone)) contacts.push({ id, name: name || id, phone, custom: true, pinned });
     });
+    const pruebaRaw = String(listQueryPhoneInput(WA_CONTACT_PRUEBA.id)?.value || '').trim();
+    const pruebaPhone = normalizeWhatsAppPhone(pruebaRaw);
+    if (pruebaPhone) {
+      const existing = contacts.find((c) => c.id === WA_CONTACT_PRUEBA.id);
+      if (existing) existing.phone = pruebaPhone;
+      else contacts.push({ id: WA_CONTACT_PRUEBA.id, name: WA_CONTACT_PRUEBA.name, phone: pruebaPhone, custom: true, pinned: true });
+    }
     return contacts;
+  };
+
+  const syncContactsToRender = async (contacts) => {
+    const toSync = contacts.filter((c) => c.phone);
+    if (!toSync.length) return { synced: 0, failed: 0, results: [] };
+
+    const results = await Promise.all(toSync.map(async (c) => {
+      try {
+        const res = await fetch(`${WHATSAPP_RENDER_API}/api/contacts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: c.name, phone: c.phone }),
+        });
+        const data = await res.json().catch(() => ({}));
+        return { id: c.id, ok: res.ok, status: res.status, error: data.error || null };
+      } catch (e) {
+        return { id: c.id, ok: false, status: 0, error: e.message || 'Error de red' };
+      }
+    }));
+
+    return {
+      synced: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
   };
 
   const syncWhatsAppContactSelect = () => {
@@ -1226,7 +1351,7 @@
     const contacts = collectContactsFromDom().filter((c) => c.phone);
     select.innerHTML = '<option value="">— Selecciona contacto —</option>'
       + contacts.map((c) => {
-        const label = `${c.name}${c.custom ? ' (extra)' : ''} · ${c.phone}`;
+        const label = `${c.name}${c.custom && !c.pinned ? ' (extra)' : ''} · ${formatPhoneForInput(c.phone)}`;
         return `<option value="${escapeHtml(c.id)}" data-phone="${escapeHtml(c.phone)}">${escapeHtml(label)}</option>`;
       }).join('');
     if (prev && [...select.options].some((o) => o.value === prev)) select.value = prev;
@@ -1239,18 +1364,22 @@
     try {
       const snap = await db.collection(COL_PHONES).get();
       const customContacts = [];
+      let pruebaData = null;
       snap.forEach((doc) => {
         const data = doc.data() || {};
         const id = doc.id;
         if (data.custom === true || isCustomContactId(id)) {
+          if (id === WA_CONTACT_PRUEBA.id) {
+            pruebaData = { id, name: data.name || WA_CONTACT_PRUEBA.name, phone: data.phone || '' };
+            return;
+          }
           customContacts.push({ id, name: data.name || '', phone: data.phone || '' });
           return;
         }
         const input = listQueryPhoneInput(id);
-        if (input) input.value = String(data.phone || '');
+        if (input) input.value = formatPhoneForInput(data.phone || defaultWhatsAppPhone(id));
       });
-      renderCustomContactRows(customContacts);
-      syncWhatsAppContactSelect();
+      renderCustomContactRows(customContacts, pruebaData);
     } catch (e) {
       console.error(e);
       renderCustomContactRows([]);
@@ -1269,16 +1398,20 @@
       const keptCustomIds = new Set();
 
       whatsappEmpIds().forEach((empId) => {
-        const phone = String(listQueryPhoneInput(empId)?.value || '').trim();
+        const raw = String(listQueryPhoneInput(empId)?.value || '').trim();
+        const phone = normalizeWhatsAppPhone(raw);
         const ref = db.collection(COL_PHONES).doc(empId);
         if (phone) {
           batch.set(ref, {
             empId,
             name: empNameById(empId),
             phone,
+            tasks: whatsappTasksForEmp(empId),
             custom: false,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
+          const input = listQueryPhoneInput(empId);
+          if (input) input.value = formatPhoneForInput(phone);
         } else {
           batch.delete(ref);
         }
@@ -1288,8 +1421,12 @@
         const id = row.getAttribute('data-wa-id');
         if (!id) return;
         keptCustomIds.add(id);
-        const name = String(row.querySelector('[data-wa-name]')?.value || '').trim();
-        const phone = String(row.querySelector('[data-wa-phone]')?.value || '').trim();
+        const pinned = row.getAttribute('data-wa-pinned') === 'true';
+        const name = pinned
+          ? WA_CONTACT_PRUEBA.name
+          : String(row.querySelector('[data-wa-name]')?.value || '').trim();
+        const raw = String(row.querySelector('[data-wa-phone]')?.value || '').trim();
+        const phone = normalizeWhatsAppPhone(raw);
         const ref = db.collection(COL_PHONES).doc(id);
         if (name || phone) {
           batch.set(ref, {
@@ -1297,21 +1434,53 @@
             name: name || 'Contacto prueba',
             phone,
             custom: true,
+            pinned,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-        } else {
+          const phoneInput = row.querySelector('[data-wa-phone]');
+          if (phoneInput && phone) phoneInput.value = formatPhoneForInput(phone);
+        } else if (!pinned) {
           batch.delete(ref);
         }
       });
 
+      {
+        const pruebaRaw = String(listQueryPhoneInput(WA_CONTACT_PRUEBA.id)?.value || '').trim();
+        const pruebaPhone = normalizeWhatsAppPhone(pruebaRaw);
+        keptCustomIds.add(WA_CONTACT_PRUEBA.id);
+        const pruebaRef = db.collection(COL_PHONES).doc(WA_CONTACT_PRUEBA.id);
+        if (pruebaPhone) {
+          batch.set(pruebaRef, {
+            empId: WA_CONTACT_PRUEBA.id,
+            name: WA_CONTACT_PRUEBA.name,
+            phone: pruebaPhone,
+            custom: true,
+            pinned: true,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          const pruebaInput = listQueryPhoneInput(WA_CONTACT_PRUEBA.id);
+          if (pruebaInput) pruebaInput.value = formatPhoneForInput(pruebaPhone);
+        }
+      }
+
       const existingCustom = await db.collection(COL_PHONES).where('custom', '==', true).get();
       existingCustom.forEach((doc) => {
-        if (!keptCustomIds.has(doc.id)) batch.delete(doc.ref);
+        if (!keptCustomIds.has(doc.id) && !isPinnedCustomId(doc.id)) batch.delete(doc.ref);
       });
 
       await batch.commit();
       syncWhatsAppContactSelect();
-      setStatus('Teléfonos guardados en Firebase.', 'ok');
+
+      const contacts = collectContactsFromDom();
+      const sync = await syncContactsToRender(contacts);
+      if (sync.failed > 0) {
+        setStatus(`Teléfonos en Firebase. Render: ${sync.synced} OK, ${sync.failed} fallaron (revisa consola).`, 'warn');
+        console.warn('[WhatsApp] sync Render', sync.results);
+      } else if (sync.synced > 0) {
+        setStatus(`Teléfonos guardados (${sync.synced} contactos en Render).`, 'ok');
+      } else {
+        setStatus('Teléfonos guardados en Firebase.', 'ok');
+      }
     } catch (e) {
       console.error(e);
       setStatus('Error al guardar teléfonos.', 'err');
@@ -1391,19 +1560,24 @@
         const res = await fetch(url.toString());
         return res.json();
       };
-      const [aseo, basura] = await Promise.all([
+      const [aseo, cocina, basura] = await Promise.all([
         fetchPreview('ASEO_RECEPCION'),
+        fetchPreview('COCINA_RECEPCION'),
         fetchPreview('SACAR_BASURA'),
       ]);
       const lines = [
         `Fecha: ${fecha}`,
         '',
         'ASEO_RECEPCION (9:00):',
-        `  ${aseo?.empId || '—'} · ${aseo?.phone || 'sin teléfono'}`,
+        `  ${aseo?.empId || '—'} · ${formatPhoneForInput(aseo?.phone) || 'sin teléfono'}`,
         aseo?.reason ? `  ${aseo.reason}` : '',
         '',
+        'COCINA_RECEPCION (9:00):',
+        `  ${cocina?.empId || '—'} · ${formatPhoneForInput(cocina?.phone) || 'sin teléfono'}`,
+        cocina?.reason ? `  ${cocina.reason}` : '',
+        '',
         'SACAR_BASURA (18:00):',
-        `  ${basura?.empId || '—'} · ${basura?.phone || 'sin teléfono'}`,
+        `  ${basura?.empId || '—'} · ${formatPhoneForInput(basura?.phone) || 'sin teléfono'}`,
         basura?.reason ? `  ${basura.reason}` : '',
       ].filter((l) => l !== '');
       setWaPreview(lines.join('\n'));
@@ -1426,7 +1600,19 @@
       return;
     }
     void callProbarWhatsApp({ accion: 'direct', phone, task, fecha });
-    setWaPreview(`Enviando prueba ${task} a ${name}\nTel: ${phone}\nFecha: ${fecha}`);
+    setWaPreview(`Enviando prueba ${task} a ${name}\nTel: ${formatPhoneForInput(phone)}\nFecha: ${fecha}`);
+  };
+
+  const sendPruebaWhatsApp = (task) => {
+    const raw = String(listQueryPhoneInput(WA_CONTACT_PRUEBA.id)?.value || '').trim();
+    const phone = normalizeWhatsAppPhone(raw);
+    const fecha = el('testWaFecha')?.value || fechaHoyInput();
+    if (!phone) {
+      setStatus('Ingresa el teléfono de PRUEBA y guarda antes de enviar.', 'warn');
+      return;
+    }
+    void callProbarWhatsApp({ accion: 'direct', phone, task, fecha });
+    setWaPreview(`Enviando ${task} a PRUEBA\nTel: ${formatPhoneForInput(phone)}\nFecha: ${fecha}`);
   };
 
   const initPanelWhatsApp = () => {
@@ -1437,7 +1623,7 @@
     if (fechaIn && !fechaIn.value) fechaIn.value = fechaHoyInput();
 
     renderPlanillaPhoneRows();
-    renderCustomContactRows([]);
+    renderCustomContactRows([], WA_CONTACT_PRUEBA);
 
     const tryLoadPhones = () => {
       if (window.almuerzoDb) void loadWhatsAppPhones();
@@ -1452,7 +1638,9 @@
     el('whatsappCustomList')?.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-wa-remove]');
       if (!btn) return;
-      btn.closest('[data-wa-row="custom"]')?.remove();
+      const row = btn.closest('[data-wa-row="custom"]');
+      if (row?.getAttribute('data-wa-pinned') === 'true') return;
+      row?.remove();
       syncWhatsAppContactSelect();
     });
 
@@ -1468,11 +1656,18 @@
       const fecha = el('testWaFecha')?.value || fechaHoyInput();
       void callProbarWhatsApp({ accion: 'enviar', task: 'ASEO_RECEPCION', fecha, force: '1' });
     });
+    el('btnWaEnviarCocina')?.addEventListener('click', () => {
+      const fecha = el('testWaFecha')?.value || fechaHoyInput();
+      void callProbarWhatsApp({ accion: 'enviar', task: 'COCINA_RECEPCION', fecha, force: '1' });
+    });
     el('btnWaEnviarBasura')?.addEventListener('click', () => {
       const fecha = el('testWaFecha')?.value || fechaHoyInput();
       void callProbarWhatsApp({ accion: 'enviar', task: 'SACAR_BASURA', fecha, force: '1' });
     });
     el('btnWaSendDirect')?.addEventListener('click', sendDirectWhatsAppTest);
+    el('btnWaPruebaAseo')?.addEventListener('click', () => sendPruebaWhatsApp('ASEO_RECEPCION'));
+    el('btnWaPruebaCocina')?.addEventListener('click', () => sendPruebaWhatsApp('COCINA_RECEPCION'));
+    el('btnWaPruebaBasura')?.addEventListener('click', () => sendPruebaWhatsApp('SACAR_BASURA'));
   };
 
   // ── INIT ───────────────────────────────────────────────────────────────────
