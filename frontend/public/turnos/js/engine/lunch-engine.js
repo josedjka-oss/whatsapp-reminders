@@ -11,7 +11,6 @@
     TRIO_SANTIAGO_MIGUEL_JUAN,
     TRIO_DESPACHO,
     DUO_SANTIAGO_MIGUEL,
-    DUO_BRAYAN_MAURICIO,
     DUO_JHONNY_CRISTIAN,
     DUO_JONATHAN_DAVID,
     ALMUERZOS_SABADO,
@@ -25,8 +24,10 @@
   const { normAm } = window.ENGINE_HOURS;
 
   const ALMUERZO_DEFAULT = '1:00';
-  const JHONNY_ID   = 'jhonny_rodriguez';
-  const CRISTIAN_ID = 'cristian_uribe';
+  const JHONNY_ID    = 'jhonny_rodriguez';
+  const CRISTIAN_ID  = 'cristian_uribe';
+  const JUAN_ID      = 'juan_giron';
+  const DUO_SM       = ['santiago_guarnizo', 'miguel_fonseca'];
 
   const {
     assignTrioSabadoLunch,
@@ -78,6 +79,48 @@
       out[others[0]] = flip ? '1:00' : '12:00';
       out[others[1]] = flip ? '12:00' : '1:00';
     });
+    return out;
+  };
+
+  /**
+   * Santiago / Miguel / Juan lun–vie:
+   * Juan = misma hora que Jhonny; Santiago y Miguel en franjas distintas (12/1/2).
+   */
+  const getLunchSantiagoMiguelJuan = (state, d, monthKey, meta) => {
+    if (d.esSabado) {
+      return assignTrioSabadoLunch(TRIO_SANTIAGO_MIGUEL_JUAN, d, meta);
+    }
+
+    const juanLunch = getJhonnyCristianLunch(d, monthKey, meta)[JHONNY_ID];
+    const out = { [JUAN_ID]: juanLunch };
+
+    const dayNum  = d.day;
+    const conDiez = DUO_SM.filter((id) => normAm(state.cells[id]?.[dayNum]) === '10');
+    const ordered = [...DUO_SM].sort((a, b) => DUO_SM.indexOf(a) - DUO_SM.indexOf(b));
+
+    if (conDiez.length === 1) {
+      const con10 = conDiez[0];
+      const otro  = DUO_SM.find((x) => x !== con10);
+
+      if (juanLunch === '2:00') {
+        const flip = hashDia(monthKey, d, `smj|${con10}`) & 1;
+        out[con10] = flip ? '1:00' : '12:00';
+        out[otro]  = flip ? '12:00' : '1:00';
+      } else {
+        out[con10] = '2:00';
+        out[otro]  = '12:00';
+      }
+      return out;
+    }
+
+    const flip = (hashDia(monthKey, d, 'smj-a') ^ hashDia(monthKey, d, 'smj-b') ^ d.day) & 1;
+    if (juanLunch === '1:00') {
+      out[ordered[0]] = flip ? '2:00' : '12:00';
+      out[ordered[1]] = flip ? '12:00' : '2:00';
+    } else {
+      out[ordered[0]] = flip ? '1:00' : '12:00';
+      out[ordered[1]] = flip ? '12:00' : '1:00';
+    }
     return out;
   };
 
@@ -209,10 +252,22 @@
       || DUO_JONATHAN_DAVID.includes(empId);
   };
 
+  /** Almuerzo calculado por motor: no conservar overrides heredados de Firebase. */
+  const isAutoComputedLunch = (empId, d) => {
+    if (!d || d.noLaborable) return false;
+    if (d.esSabado) return isSaturdayAutoLunch(empId, d);
+    if (GRUPO_MENSAJEROS.includes(empId)) return true;
+    if (TRIO_SANTIAGO_MIGUEL_JUAN.includes(empId)) return true;
+    if (TRIO_DESPACHO.includes(empId)) return true;
+    if (DUO_JHONNY_CRISTIAN.includes(empId)) return true;
+    if (almuerzoFijoSemana(empId)) return true;
+    return false;
+  };
+
   const shouldKeepLunchOverride = (empId, d, monthKey, state, meta) => {
     const manual = getLunchOverride(state, empId, d.day);
     if (!manual || !isValidManualLunch(manual)) return false;
-    if (isSaturdayAutoLunch(empId, d)) return false;
+    if (isAutoComputedLunch(empId, d)) return false;
     return hasManualLunchOverride(empId, d, monthKey, state, meta);
   };
 
@@ -255,7 +310,7 @@
     }
 
     if (TRIO_SANTIAGO_MIGUEL_JUAN.includes(empId)) {
-      const map = getLunchTresGrupo(state, d, monthKey, TRIO_SANTIAGO_MIGUEL_JUAN, 'smj', meta);
+      const map = getLunchSantiagoMiguelJuan(state, d, monthKey, meta);
       return map[empId] ?? ALMUERZO_DEFAULT;
     }
 
@@ -364,6 +419,7 @@
     lunchTimeToMinutes,
     parseLunchRange,
     getLunchTresGrupo,
+    getLunchSantiagoMiguelJuan,
     getJhonnyCristianLunch,
     assignTrioSabadoLunch,
     assignDuoSabadoLunch,
@@ -372,6 +428,7 @@
     purgeStaleLunchOverrides,
     isValidManualLunch,
     isSaturdayAutoLunch,
+    isAutoComputedLunch,
     shouldKeepLunchOverride,
   };
 

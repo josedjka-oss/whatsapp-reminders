@@ -791,6 +791,8 @@
             const day = Number(dayStr);
             const v   = savedCells[empId][dayStr];
             if (v?.lunch != null && String(v.lunch).trim() !== '') {
+              const dMeta = getMonthMeta(monthKey).days.find((x) => x.day === day);
+              if (dMeta && window.ENGINE_LUNCH?.isAutoComputedLunch?.(empId, dMeta)) return;
               if (!state.lunchOverrides[empId]) state.lunchOverrides[empId] = {};
               state.lunchOverrides[empId][day] = normalizeLunchTime(v.lunch);
             }
@@ -1430,19 +1432,25 @@
       window.ENGINE_VALIDATOR?.printValidation(state, monthKey || getActiveMonthKey()),
     regenerate: async (monthKey) => {
       const mk = monthKey || getActiveMonthKey();
+      if (mk !== state.monthKey) {
+        await loadMonthOrGenerate(mk);
+      }
       state.manualAmPmLocks = {};
       purgeStaleLunchOverrides(state, mk);
       ensureStateShape(state, mk);
       await loadAdjacentMonthCells(mk);
       rebalanceAfterCrossMonth(mk);
       recalcExtras(state, mk);
+      state.monthKey = mk;
+      syncMonthPicker(mk);
       render(true);
       return window.ENGINE_VALIDATOR?.printValidation(state, mk);
     },
     regenerateAndSave: async (monthKey) => {
-      const errors = await window.TURNOS_DEBUG.regenerate(monthKey);
+      const mk = monthKey || getActiveMonthKey();
+      const errors = await window.TURNOS_DEBUG.regenerate(mk);
       const ok = await saveToFirebase(false);
-      return { errors, saved: ok };
+      return { errors, saved: ok, monthKey: mk };
     },
   };
 

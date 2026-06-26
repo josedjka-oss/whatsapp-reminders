@@ -241,6 +241,8 @@
     enforceJhonny(state, meta, minDay);
     liftJhonny(state, meta, monthKey, minDay);
     capJhonnyTo44(state, meta, minDay);
+    applyLunesMartesMensajeroDiez(state, meta, minDay || 1);
+    enforceTrioLunesNormal(state, meta);
   };
 
   // ─── PIPELINE PRINCIPAL ───────────────────────────────────────────────────────

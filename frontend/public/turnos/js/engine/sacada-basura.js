@@ -40,21 +40,26 @@
    * @returns {Object.<number, string>} dayNum → empId
    */
   const buildBasuraPorDia = (state, meta, monthKey) => {
-    const map    = {};
-    const counts = Object.fromEntries(BASURA_SACADA_IDS.map((id) => [id, 0]));
+    const map       = {};
+    const counts    = Object.fromEntries(BASURA_SACADA_IDS.map((id) => [id, 0]));
+    let lastPick    = null;
 
     const days = meta.days
       .filter(esDiaBasura)
-      .sort((a, b) => hashMix(`${monthKey}|b|${a.day}`) - hashMix(`${monthKey}|b|${b.day}`));
+      .sort((a, b) => a.day - b.day);
 
     const monthSeed = hashMix(`${monthKey}|basura`);
 
     days.forEach((d) => {
-      const eligible = BASURA_SACADA_IDS.filter((id) => {
+      let eligible = BASURA_SACADA_IDS.filter((id) => {
         const pm = state.cells[id]?.[d.day]?.pm;
         return puedeSacarBasura(pm);
       });
       if (!eligible.length) return;
+
+      if (lastPick && eligible.length > 1) {
+        eligible = eligible.filter((id) => id !== lastPick);
+      }
 
       eligible.sort((a, b) => {
         if (counts[a] !== counts[b]) return counts[a] - counts[b];
@@ -66,6 +71,7 @@
       const pick = eligible[0];
       map[d.day] = pick;
       counts[pick] += 1;
+      lastPick = pick;
     });
 
     return map;

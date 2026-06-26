@@ -4,6 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "WhatsApp Reminders - Dashboard",
   description: "Gestiona tus recordatorios y contactos de WhatsApp",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({
