@@ -182,6 +182,7 @@
       line-height: 1.2;
     }
     .page-legend-mobile .leg-aseo { background: #e1bee7; color: #4a148c; border: 1px solid #7b1fa2; }
+    .page-legend-mobile .leg-cocina { background: #ffe0b2; color: #bf360c; border: 1px solid #e65100; }
     .page-legend-mobile .leg-basura { background: #c8e6c9; color: #1b5e20; border: 1px solid #2e7d32; }
     .page-legend-mobile .leg-ajuste { background: #fff9c4; color: #795548; border: 1px solid #fbc02d; }
 
@@ -435,6 +436,40 @@
       margin: 0;
     }
 
+    /* cocina 9:00 */
+    td.celda-cocina-recepcion {
+      background: #ffe0b2 !important;
+      box-shadow: inset 0 0 0 2px #e65100;
+      padding: 1px 2px !important;
+      text-align: center;
+      vertical-align: middle;
+    }
+    td.celda-cocina-recepcion .celda-cocina-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    td.celda-cocina-recepcion .cocina-in-label {
+      display: block;
+      font-size: 7px;
+      font-weight: 800;
+      color: #bf360c;
+      line-height: 1;
+      pointer-events: none;
+      user-select: none;
+    }
+    td.celda-cocina-recepcion .cell-in {
+      background: #ffcc80;
+      font-weight: 800;
+      color: #bf360c;
+      width: 26px;
+      margin: 0;
+    }
+
     /* sacada de basura 18:00 (lun, mié, vie) */
     td.celda-sacada-basura {
       background: #c8e6c9 !important;
@@ -661,6 +696,7 @@
         padding: 4px 2px;
       }
       td.celda-aseo-recepcion .cell-in,
+      td.celda-cocina-recepcion .cell-in,
       td.celda-sacada-basura .cell-in { width: 2rem; }
       .cell-in-lunch { min-width: 4rem; min-height: 32px; font-size: 11px; }
       .lunch-hdr-trio-note, .lunch-hdr-time { display: none; }
@@ -675,6 +711,7 @@
       .day-head { min-width: 1.85rem; }
       .dh-tag { font-size: 7px; padding: 0 2px; }
       td.celda-aseo-recepcion .aseo-in-label,
+      td.celda-cocina-recepcion .cocina-in-label,
       td.celda-sacada-basura .basura-in-label { font-size: 6px; }
     }
 
@@ -856,11 +893,13 @@
     Jhonny: lun/mar 9/6 · mié 9/5 · jue 10/6 · vie 9/5. Cristian: jue nunca 10; mié/vie puede 10.
     Despacho (Jesús + Brandon rotan; Brayan R fijo). S/M + Juan (Juan fijo 9/6).
     Aseo recepción lun–vie 9:00 · sáb 9:30 (celda <strong style="color:#7b1fa2">morada</strong>).
+    Aseo lun–vie 9:00 · sáb 9:30 (celda morada). Cocina mismo horario (celda <strong style="color:#e65100">naranja</strong>). Nadie aseo+cocina el mismo día.
     Almuerzo lun–vie 1 h; sáb dúos 12:30-1:00 / 1:00-1:30 · tríos +1:30-2:00 (rotación). Jhon Lozano 3:00.
-    Basura 18:00 (lun, mié, vie): Harold, Diego, Dilan, Santiago, Cristian, Jhon, Jesús, Brayan Ramírez, Brandon — celda <strong style="color:#2e7d32">verde</strong>. Manual: <strong>9A</strong> aseo · <strong>6B</strong> basura (recalcula días siguientes).
+    Basura 18:00 (lun, mié, vie): Harold, Diego, Dilan, Santiago, Cristian, Jhon, Jesús, Brayan Ramírez, Brandon — celda <strong style="color:#2e7d32">verde</strong>. Manual: <strong>9A</strong> aseo · <strong>9C</strong> cocina · <strong>6B</strong> basura (recalcula días siguientes).
   </p>
   <div class="page-legend-mobile" aria-label="Leyenda de colores">
     <span class="leg leg-aseo">Morado = aseo 9h / sáb 9:30</span>
+    <span class="leg leg-cocina">Naranja = cocina 9h / sáb 9:30</span>
     <span class="leg leg-basura">Verde = basura 18h</span>
     <span class="leg leg-ajuste">Amarillo = 10 / 17h</span>
   </div>
@@ -987,24 +1026,25 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Motor de horarios (orden obligatorio) -->
-<script src="js/engine/constants.js?v=20260616c"></script>
-<script src="js/engine/calendar.js?v=20260616c"></script>
-<script src="js/engine/hours.js?v=20260616c"></script>
-<script src="js/engine/cell-mutation.js?v=20260616c"></script>
-<script src="js/engine/recepcion-aseo.js?v=20260616c"></script>
-<script src="js/engine/sacada-basura.js?v=20260616c"></script>
-<script src="js/engine/lunch-sabado.js?v=20260616c"></script>
-<script src="js/engine/rules-messengers.js?v=20260616c"></script>
-<script src="js/engine/rules-duos.js?v=20260616c"></script>
-<script src="js/engine/rules-johnny.js?v=20260616c"></script>
-<script src="js/engine/cap-engine.js?v=20260616c"></script>
-<script src="js/engine/scheduler.js?v=20260616c"></script>
-<script src="js/engine/lunch-engine.js?v=20260616c"></script>
-<script src="js/engine/validator.js?v=20260616c"></script>
+<script src="js/engine/constants.js?v=20260616d"></script>
+<script src="js/engine/calendar.js?v=20260616d"></script>
+<script src="js/engine/hours.js?v=20260616d"></script>
+<script src="js/engine/cell-mutation.js?v=20260616d"></script>
+<script src="js/engine/recepcion-aseo.js?v=20260616d"></script>
+<script src="js/engine/recepcion-cocina.js?v=20260616d"></script>
+<script src="js/engine/sacada-basura.js?v=20260616d"></script>
+<script src="js/engine/lunch-sabado.js?v=20260616d"></script>
+<script src="js/engine/rules-messengers.js?v=20260616d"></script>
+<script src="js/engine/rules-duos.js?v=20260616d"></script>
+<script src="js/engine/rules-johnny.js?v=20260616d"></script>
+<script src="js/engine/cap-engine.js?v=20260616d"></script>
+<script src="js/engine/scheduler.js?v=20260616d"></script>
+<script src="js/engine/lunch-engine.js?v=20260616d"></script>
+<script src="js/engine/validator.js?v=20260616d"></script>
 
 <!-- Orquestador principal -->
-<script src="js/turnos-auth.js?v=20260616c"></script>
-<script src="js/turnos.js?v=20260616c"></script>
+<script src="js/turnos-auth.js?v=20260616d"></script>
+<script src="js/turnos.js?v=20260616d"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>

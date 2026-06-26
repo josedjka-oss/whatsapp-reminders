@@ -85,6 +85,7 @@
     const map    = {};
     const counts = Object.fromEntries(ASEO_RECEPCION_IDS.map((id) => [id, 0]));
     const manual = state?.aseoOverrides || {};
+    const cocinaManual = state?.cocinaOverrides || {};
 
     const days = meta.days
       .filter((d) => !d.noLaborable && d.dow >= 1 && d.dow <= 6)
@@ -94,10 +95,11 @@
 
     days.forEach((d) => {
       const basuraEmp = basuraMap?.[d.day] ?? basuraMap?.[String(d.day)] ?? null;
+      const cocinaEmp = cocinaManual[d.day] ?? cocinaManual[String(d.day)] ?? null;
       const manualEmp = manual[d.day] ?? manual[String(d.day)] ?? null;
 
       if (manualEmp && ASEO_RECEPCION_IDS.includes(manualEmp)) {
-        if (!basuraEmp || manualEmp !== basuraEmp) {
+        if (manualEmp !== cocinaEmp && (!basuraEmp || manualEmp !== basuraEmp)) {
           map[d.day] = manualEmp;
           counts[manualEmp] += 1;
           return;
@@ -106,6 +108,7 @@
 
       const eligible = ASEO_RECEPCION_IDS.filter((id) => {
         if (basuraEmp && id === basuraEmp) return false;
+        if (cocinaEmp && id === cocinaEmp) return false;
         const am = state.cells[id]?.[d.day]?.am;
         return isEntradaAseoElegible(am, d.esSabado);
       });

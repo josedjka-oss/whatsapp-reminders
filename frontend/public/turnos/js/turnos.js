@@ -54,13 +54,14 @@
   const isSalidaCinco = (v) => normPm({ pm: v }) === '5';
 
   const isManualAseoToken = (raw) => /^9\s*A$/i.test(String(raw ?? '').trim());
+  const isManualCocinaToken = (raw) => /^9\s*C$/i.test(String(raw ?? '').trim());
   const isManualBasuraToken = (raw) => /^6\s*B$/i.test(String(raw ?? '').trim());
 
   /** Normaliza am guardado en state (9 · 10 · 930) para elegibilidad aseo/basura. */
   const normalizeCellAm = (raw) => {
     const v = String(raw ?? '').trim();
     if (v === '') return '';
-    if (isManualAseoToken(v)) return '9';
+    if (isManualAseoToken(v) || isManualCocinaToken(v)) return '9';
     if (esAusenteEntradaCeroRaw(v)) return '0';
     const parsed = normAm({ am: v });
     if (parsed === null) return v;
@@ -86,8 +87,12 @@
   const getBasuraOverrideEmp = (day) =>
     state.basuraOverrides?.[day] ?? state.basuraOverrides?.[String(day)] ?? null;
 
+  const getCocinaOverrideEmp = (day) =>
+    state.cocinaOverrides?.[day] ?? state.cocinaOverrides?.[String(day)] ?? null;
+
   const amDisplayForCell = (empId, d, c) => {
     if (getAseoOverrideEmp(d.day) === empId) return '9A';
+    if (getCocinaOverrideEmp(d.day) === empId) return '9C';
     return formatAmDisplay(c.am) || '';
   };
 
@@ -103,14 +108,19 @@
   };
 
   const { buildAseoRecepcionPorDia, isAseoRecepcionDia, horaAseoRecepcion } = window.ENGINE_RECEPCION_ASEO;
+  const { buildCocinaRecepcionPorDia, isCocinaRecepcionDia, horaCocinaRecepcion } = window.ENGINE_RECEPCION_COCINA;
   const { buildBasuraPorDia, isBasuraSacadaDia }         = window.ENGINE_SACADA_BASURA;
 
   const openTdAmPm = (marcado, rowKind, c, dayMeta, flags = {}) => {
-    const { isAseo, isBasura } = flags;
+    const { isAseo, isCocina, isBasura } = flags;
     if (marcado) return '<td class="celda-dia-marcado-naranja">';
     if (isAseo && rowKind === 'am') {
       const hr = horaAseoRecepcion(!!dayMeta?.esSabado);
       return `<td class="celda-aseo-recepcion" title="Aseo recepción ${hr}">`;
+    }
+    if (isCocina && rowKind === 'am') {
+      const hr = horaCocinaRecepcion(!!dayMeta?.esSabado);
+      return `<td class="celda-cocina-recepcion" title="Cocina ${hr}">`;
     }
     if (isBasura && rowKind === 'pm') {
       return '<td class="celda-sacada-basura" title="Sacada de basura 18:00">';
@@ -160,6 +170,7 @@
     cells:                {},
     lunchOverrides:       {},
     aseoOverrides:        {},
+    cocinaOverrides:      {},
     basuraOverrides:      {},
     flagsDiaMarcadoNoLab: {},
     trioAusentePorDia:    {},
@@ -373,6 +384,7 @@
     if (!state.lunchOverrides) state.lunchOverrides = {};
 
     const nextAseoOverrides    = {};
+    const nextCocinaOverrides  = {};
     const nextBasuraOverrides  = {};
 
     EMPLEADOS.forEach((emp) => {
@@ -397,11 +409,12 @@
         const pmRaw = pmIn ? pmIn.value.trim() : '';
 
         if (isManualAseoToken(amRaw)) nextAseoOverrides[day] = emp.id;
+        if (isManualCocinaToken(amRaw)) nextCocinaOverrides[day] = emp.id;
         if (isManualBasuraToken(pmRaw)) nextBasuraOverrides[day] = emp.id;
 
         if (esAusenteEntradaCeroRaw(amRaw)) {
           state.cells[emp.id][day] = { am: '0', pm: '' };
-        } else if (isManualAseoToken(amRaw)) {
+        } else if (isManualAseoToken(amRaw) || isManualCocinaToken(amRaw)) {
           state.cells[emp.id][day] = {
             am: d.esSabado ? CFG.AM_SABADO : '9',
             pm: normalizeCellPm(pmRaw),
@@ -438,6 +451,7 @@
     });
 
     state.aseoOverrides   = nextAseoOverrides;
+    state.cocinaOverrides = nextCocinaOverrides;
     state.basuraOverrides = nextBasuraOverrides;
     state.monthKey = monthKey;
     recalcExtras(state, monthKey);
@@ -463,7 +477,7 @@
 
   // ── RENDER CELDAS ──────────────────────────────────────────────────────────
 
-  const renderDayCells = (empId, rowKind, meta, monthKey, chunks, aseoMap, basuraMap) => {
+  const renderDayCells = (empId, rowKind, meta, monthKey, chunks, aseoMap, cocinaMap, basuraMap) => {
     const empLabel = EMPLEADOS.find(e => e.id === empId)?.name || empId;
     const roVal = (v) => {
       const t = formatAmDisplay(v);
@@ -480,9 +494,11 @@
       const oCls    = marcado ? ' celda-dia-marcado-naranja' : '';
       const isAseo   = isAseoRecepcionDia(aseoMap, empId, d.day)
         || getAseoOverrideEmp(d.day) === empId;
+      const isCocina = isCocinaRecepcionDia(cocinaMap, empId, d.day)
+        || getCocinaOverrideEmp(d.day) === empId;
       const isBasura = isBasuraSacadaDia(basuraMap, empId, d.day)
         || getBasuraOverrideEmp(d.day) === empId;
-      const tdFlags  = { isAseo, isBasura };
+      const tdFlags  = { isAseo, isCocina, isBasura };
 
       if (rowKind === 'am') {
         if (d.noLaborable) {
@@ -498,13 +514,24 @@
                 title="9A = aseo manual este día"
                 aria-label="${empLabel} día ${d.day} aseo recepción ${horaAseoRecepcion(!!d.esSabado)}" />`}
             </div></td>`;
+        } else if (isCocina) {
+          html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
+            <div class="celda-cocina-inner">
+              <span class="cocina-in-label">Cocina</span>
+              ${READ_ONLY
+                ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} cocina">${amDisplayForCell(empId, d, c) || '–'}</span>`
+                : `<input type="text" inputmode="text" class="cell-in"
+                data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
+                title="9C = cocina manual este día"
+                aria-label="${empLabel} día ${d.day} cocina ${horaCocinaRecepcion(!!d.esSabado)}" />`}
+            </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
             ${READ_ONLY
-              ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} entrada">${roVal(c.am)}</span>`
+              ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} entrada">${amDisplayForCell(empId, d, c) || roVal(c.am)}</span>`
               : `<input type="text" inputmode="text" class="cell-in"
               data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
-              title="9A = aseo manual este día"
+              title="9A = aseo · 9C = cocina manual"
               aria-label="${empLabel} día ${d.day} entrada" />`}</td>`;
         }
 
@@ -573,6 +600,7 @@
     const chunks      = buildWeekChunks(meta);
     const basuraMap    = buildBasuraPorDia(state, meta, monthKey);
     const aseoMap      = buildAseoRecepcionPorDia(state, meta, monthKey, basuraMap);
+    const cocinaMap    = buildCocinaRecepcionPorDia(state, meta, monthKey, basuraMap, aseoMap);
     const wrap        = el('sheetWrap');
     if (!wrap) return;
 
@@ -594,13 +622,13 @@
             <span class="he-lbl">H.ext.</span>
             <span class="he-val">${he}</span>
           </th>
-          ${renderDayCells(emp.id, 'am', meta, monthKey, chunks, aseoMap, basuraMap)}
+          ${renderDayCells(emp.id, 'am', meta, monthKey, chunks, aseoMap, cocinaMap, basuraMap)}
         </tr>
         <tr class="emp-lunch-row${tc}">
-          ${renderDayCells(emp.id, 'lunch', meta, monthKey, chunks, aseoMap, basuraMap)}
+          ${renderDayCells(emp.id, 'lunch', meta, monthKey, chunks, aseoMap, cocinaMap, basuraMap)}
         </tr>
         <tr class="emp-pm-row${tc}">
-          ${renderDayCells(emp.id, 'pm', meta, monthKey, chunks, aseoMap, basuraMap)}
+          ${renderDayCells(emp.id, 'pm', meta, monthKey, chunks, aseoMap, cocinaMap, basuraMap)}
         </tr>
         <tr class="spacer"><td colspan="${colCount}"></td></tr>`;
     });
@@ -696,6 +724,7 @@
         cells:                cloneCells(state.cells),
         lunchOverrides:       cloneJson(state.lunchOverrides),
         aseoOverrides:        cloneJson(state.aseoOverrides),
+        cocinaOverrides:      cloneJson(state.cocinaOverrides),
         basuraOverrides:      cloneJson(state.basuraOverrides),
         flagsDiaMarcadoNoLab: cloneJson(state.flagsDiaMarcadoNoLab),
         trioAusentePorDia:    cloneJson(state.trioAusentePorDia),
@@ -747,6 +776,7 @@
       cells:                {},
       lunchOverrides:       {},
       aseoOverrides:        {},
+      cocinaOverrides:      {},
       basuraOverrides:      {},
       flagsDiaMarcadoNoLab: {},
       trioAusentePorDia:    {},
@@ -813,6 +843,7 @@
       cells:                {},
       lunchOverrides:       {},
       aseoOverrides:        {},
+      cocinaOverrides:      {},
       basuraOverrides:      {},
       flagsDiaMarcadoNoLab: {},
       trioAusentePorDia:    {},
@@ -826,6 +857,10 @@
       }
       if (payload.basuraOverrides && typeof payload.basuraOverrides === 'object') {
         state.basuraOverrides = JSON.parse(JSON.stringify(payload.basuraOverrides));
+      }
+
+      if (payload.cocinaOverrides && typeof payload.cocinaOverrides === 'object') {
+        state.cocinaOverrides = JSON.parse(JSON.stringify(payload.cocinaOverrides));
       }
 
       if (payload.lunchOverrides) {
@@ -1107,8 +1142,9 @@
 
   const whatsappEmpIds = () => {
     const aseo = window.ENGINE_RECEPCION_ASEO?.ASEO_RECEPCION_IDS || [];
+    const cocina = window.ENGINE_RECEPCION_COCINA?.COCINA_RECEPCION_IDS || [];
     const basura = window.ENGINE_SACADA_BASURA?.BASURA_SACADA_IDS || [];
-    return [...new Set([...aseo, ...basura])];
+    return [...new Set([...aseo, ...cocina, ...basura])];
   };
 
   const empNameById = (empId) => {
