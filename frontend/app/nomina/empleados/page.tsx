@@ -19,6 +19,7 @@ type Employee = {
   baseBonus: string | number;
   bonusFrequency: string;
   monthlyHoursBase: number;
+  hireDate: string | null;
   isActive: boolean;
   deductions: Deduction[];
 };
@@ -41,6 +42,7 @@ export default function NominaEmpleadosPage() {
     baseBonus: "",
     bonusFrequency: "QUINCENAL",
     monthlyHoursBase: "240",
+    hireDate: "",
   });
   const [deductionForm, setDeductionForm] = useState<
     Record<string, { label: string; amount: string; appliesTo: string }>
@@ -77,6 +79,7 @@ export default function NominaEmpleadosPage() {
         baseBonus: Number(form.baseBonus) || 0,
         bonusFrequency: form.bonusFrequency,
         monthlyHoursBase: Number(form.monthlyHoursBase) || 240,
+        hireDate: form.hireDate || undefined,
       }),
     });
     if (!res.ok) {
@@ -92,6 +95,7 @@ export default function NominaEmpleadosPage() {
       baseBonus: "",
       bonusFrequency: "QUINCENAL",
       monthlyHoursBase: "240",
+      hireDate: "",
     });
     void load();
   };
@@ -230,6 +234,16 @@ export default function NominaEmpleadosPage() {
               value={form.baseBonus}
               onChange={(e) => setForm({ ...form, baseBonus: e.target.value })}
             />
+            <label className="text-sm">
+              Fecha de ingreso (prima)
+              <input
+                type="date"
+                className="mt-1 w-full border rounded-lg px-3 py-2"
+                value={form.hireDate}
+                onChange={(e) => setForm({ ...form, hireDate: e.target.value })}
+                aria-label="Fecha de ingreso nuevo empleado"
+              />
+            </label>
             <select
               className="border rounded-lg px-3 py-2"
               value={form.bonusFrequency}
@@ -371,6 +385,20 @@ export default function NominaEmpleadosPage() {
                     <option value="QUINCENAL">Quincenal</option>
                     <option value="MENSUAL">Mensual (solo 30/31)</option>
                   </select>
+                </label>
+                <label className="text-sm md:col-span-2">
+                  Fecha de ingreso (prima de servicios)
+                  <input
+                    type="date"
+                    className="mt-1 w-full border rounded-lg px-3 py-2"
+                    defaultValue={emp.hireDate ? String(emp.hireDate).slice(0, 10) : ""}
+                    onBlur={(e) =>
+                      void handleUpdateEmployee(emp, {
+                        hireDate: e.target.value || null,
+                      })
+                    }
+                    aria-label={`Fecha ingreso ${emp.name}`}
+                  />
                 </label>
                 <label className="text-sm md:col-span-2">
                   Teléfono WhatsApp

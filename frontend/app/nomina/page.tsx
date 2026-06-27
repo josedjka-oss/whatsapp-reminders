@@ -15,6 +15,13 @@ export default function NominaHomePage() {
       color: "from-emerald-500 to-emerald-600",
     },
     {
+      title: "Prima",
+      desc: "Fechas de ingreso, liquidación semestral y envío manual por WhatsApp",
+      href: "/nomina/prima",
+      emoji: "🎁",
+      color: "from-rose-500 to-rose-600",
+    },
+    {
       title: "Empleados",
       desc: "Salario, bonificación, descuentos fijos y teléfono WhatsApp",
       href: "/nomina/empleados",

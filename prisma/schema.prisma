@@ -80,6 +80,7 @@ model NominaEmployee {
   baseBonus          Decimal  @default(0) @db.Decimal(12, 2)
   bonusFrequency     String   @default("QUINCENAL") // QUINCENAL | MENSUAL
   monthlyHoursBase   Int      @default(240) // base horas/mes para calcular hora ordinaria (240, 220, 200…)
+  hireDate           DateTime? @db.Date // fecha ingreso laboral (prima de servicios)
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

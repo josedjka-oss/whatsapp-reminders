@@ -22,6 +22,12 @@ import {
   roundCopToThousand,
 } from "../utils/nomina-calculations";
 import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
+import {
+  buildPrimaWhatsAppMessage,
+  computePrimaForEmployee,
+  parseDateOnly,
+  type PrimaSemester,
+} from "../utils/nomina-prima-calculations";
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 
@@ -800,6 +806,133 @@ export const sendAllSlipsWhatsApp = async (periodId: string) => {
   }
 
   return results;
+};
+
+export const computePrimaRowForEmployee = async (
+  employeeId: string,
+  year: number,
+  semester: PrimaSemester
+) => {
+  const employee = await prisma.nominaEmployee.findUniqueOrThrow({
+    where: { id: employeeId },
+  });
+
+  const hireDate = employee.hireDate ? parseDateOnly(employee.hireDate) : null;
+  const calc = computePrimaForEmployee({
+    monthlySalary: toMoney(employee.baseSalary),
+    hireDate,
+    year,
+    semester,
+  });
+
+  return { employee, calc };
+};
+
+export const buildPrimaWhatsAppMessageForEmployee = async (
+  employeeId: string,
+  year: number,
+  semester: PrimaSemester
+): Promise<string> => {
+  const { employee, calc } = await computePrimaRowForEmployee(
+    employeeId,
+    year,
+    semester
+  );
+  return buildPrimaWhatsAppMessage({
+    employeeName: employee.name,
+    monthlySalary: calc.monthlySalary,
+    daysWorked: calc.daysWorked,
+    primaAmount: calc.primaAmount,
+    formula: calc.formula,
+    semesterLabel: calc.semesterLabel,
+    year,
+    semester,
+  });
+};
+
+export const sendPrimaWhatsApp = async (
+  employeeId: string,
+  year: number,
+  semester: PrimaSemester
+) => {
+  const { employee, calc } = await computePrimaRowForEmployee(
+    employeeId,
+    year,
+    semester
+  );
+
+  if (!employee.phone) {
+    throw new Error(
+      `El empleado ${employee.name} no tiene teléfono WhatsApp configurado.`
+    );
+  }
+
+  if (calc.primaAmount <= 0) {
+    throw new Error(
+      `El empleado ${employee.name} no tiene prima liquidable en este semestre.`
+    );
+  }
+
+  const reminderText = buildPrimaWhatsAppMessage({
+    employeeName: employee.name,
+    monthlySalary: calc.monthlySalary,
+    daysWorked: calc.daysWorked,
+    primaAmount: calc.primaAmount,
+    formula: calc.formula,
+    semesterLabel: calc.semesterLabel,
+    year,
+    semester,
+  });
+
+  const to = normalizeWhatsAppPhoneNumber(employee.phone);
+  const sid = await sendWhatsAppMessage({ to, reminderText });
+
+  return { sid, to, reminderText, calc, employeeName: employee.name };
+};
+
+export const sendAllPrimaWhatsApp = async (
+  year: number,
+  semester: PrimaSemester
+) => {
+  const employees = await prisma.nominaEmployee.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+  });
+
+  const results: Array<{
+    employeeId: string;
+    employeeName: string;
+    ok: boolean;
+    error?: string;
+    sid?: string;
+    to?: string;
+  }> = [];
+
+  for (const employee of employees) {
+    try {
+      const { sid, to } = await sendPrimaWhatsApp(employee.id, year, semester);
+      results.push({
+        employeeId: employee.id,
+        employeeName: employee.name,
+        ok: true,
+        sid,
+        to,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error desconocido";
+      results.push({
+        employeeId: employee.id,
+        employeeName: employee.name,
+        ok: false,
+        error: message,
+      });
+    }
+  }
+
+  const sent = results.filter((r) => r.ok).length;
+  const failed = results.filter((r) => !r.ok).length;
+
+  return { sent, failed, results };
 };
 
 export const decodePhotoBase64 = (

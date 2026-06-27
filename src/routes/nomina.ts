@@ -6,6 +6,7 @@ import {
   assertPrestamoGroupEditable,
   assertQuincenaDescuentoEditable,
   assertValeEditable,
+  buildPrimaWhatsAppMessageForEmployee,
   buildSlipPublicUrl,
   closeQuincena,
   createNominaValeOrPrestamo,
@@ -20,6 +21,8 @@ import {
   getSlipByToken,
   resolvePeriodHalfForToday,
   sendAllSlipsWhatsApp,
+  sendAllPrimaWhatsApp,
+  sendPrimaWhatsApp,
   sendSlipWhatsApp,
   serializeNominaSlipForApi,
   uploadValePhoto,
@@ -32,6 +35,12 @@ import {
   normalizeBonusFrequency,
   normalizeMonthlyHoursBase,
 } from "../utils/nomina-calculations";
+import {
+  computePrimaForEmployee,
+  parseDateOnly,
+  PRIMA_EXAMPLES,
+  type PrimaSemester,
+} from "../utils/nomina-prima-calculations";
 
 const router = Router();
 
@@ -57,6 +66,19 @@ const parseMoney = (raw: unknown, field: string): number => {
     throw new Error(`${field} debe ser un número >= 0`);
   }
   return n;
+};
+
+const parseHireDate = (raw: unknown): Date | null | undefined => {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === "") return null;
+  const parsed = parseDateOnly(String(raw));
+  if (!parsed) throw new Error("hireDate debe ser YYYY-MM-DD");
+  return parsed;
+};
+
+const parsePrimaSemester = (raw: unknown): PrimaSemester => {
+  const n = Number(raw ?? 1);
+  return n === 2 ? 2 : 1;
 };
 
 // --- Público: recibo por token (sin auth) ---
@@ -162,6 +184,7 @@ router.post("/employees", async (req, res) => {
       baseBonus,
       bonusFrequency,
       monthlyHoursBase,
+      hireDate,
       isActive,
     } = req.body ?? {};
     if (!name || typeof name !== "string") {
@@ -181,6 +204,7 @@ router.post("/employees", async (req, res) => {
           monthlyHoursBase !== undefined
             ? parseHoursBase(monthlyHoursBase, "monthlyHoursBase")
             : 240,
+        hireDate: parseHireDate(hireDate) ?? null,
         isActive: isActive !== false,
       },
     });
@@ -201,6 +225,7 @@ router.patch("/employees/:id", async (req, res) => {
       baseBonus,
       bonusFrequency,
       monthlyHoursBase,
+      hireDate,
       isActive,
     } = req.body ?? {};
     const data: Prisma.NominaEmployeeUpdateInput = {};
@@ -220,6 +245,9 @@ router.patch("/employees/:id", async (req, res) => {
     if (monthlyHoursBase !== undefined) {
       data.monthlyHoursBase = parseHoursBase(monthlyHoursBase, "monthlyHoursBase");
     }
+    if (hireDate !== undefined) {
+      data.hireDate = parseHireDate(hireDate);
+    }
     if (isActive !== undefined) data.isActive = Boolean(isActive);
 
     const employee = await prisma.nominaEmployee.update({
@@ -236,6 +264,143 @@ router.patch("/employees/:id", async (req, res) => {
 router.delete("/employees/:id", async (req, res) => {
   await prisma.nominaEmployee.delete({ where: { id: req.params.id } });
   return res.json({ ok: true });
+});
+
+// --- Prima de servicios ---
+router.get("/prima/examples", (_req, res) => {
+  return res.json({
+    formula: "(Salario mensual × Días trabajados) / 360",
+    daysConvention: "Meses de 30 días; semestre completo = 180 días",
+    semester1: "1 enero – 30 junio (180 días)",
+    semester2: "1 julio – 31 diciembre (180 días)",
+    examples: PRIMA_EXAMPLES,
+  });
+});
+
+router.get("/prima/preview", async (req, res) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const semester = parsePrimaSemester(req.query.semester);
+    const onlyActive = req.query.onlyActive !== "0";
+
+    if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: "year inválido" });
+    }
+
+    const employees = await prisma.nominaEmployee.findMany({
+      where: onlyActive ? { isActive: true } : undefined,
+      orderBy: { name: "asc" },
+    });
+
+    const rows = employees.map((emp) => {
+      const hireDate = emp.hireDate ? parseDateOnly(emp.hireDate) : null;
+      const calc = computePrimaForEmployee({
+        monthlySalary: Number(emp.baseSalary),
+        hireDate,
+        year,
+        semester,
+      });
+      return {
+        employeeId: emp.id,
+        employeeName: emp.name,
+        phone: emp.phone,
+        isActive: emp.isActive,
+        ...calc,
+      };
+    });
+
+    const totalPrima = rows.reduce((sum, r) => sum + r.primaAmount, 0);
+
+    return res.json({
+      year,
+      semester,
+      semesterLabel: rows[0]?.semesterLabel ?? "",
+      formula: "(Salario mensual × Días trabajados) / 360",
+      totalPrima,
+      rows,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.get("/prima/calculate", (req, res) => {
+  try {
+    const monthlySalary = parseMoney(req.query.monthlySalary ?? 0, "monthlySalary");
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const semester = parsePrimaSemester(req.query.semester);
+    const hireRaw = String(req.query.hireDate ?? "").trim();
+    const hireDate = hireRaw ? parseDateOnly(hireRaw) : parseDateOnly(`${year}-01-01`);
+
+    if (!hireDate) {
+      return res.status(400).json({ error: "hireDate inválido (YYYY-MM-DD)" });
+    }
+
+    const result = computePrimaForEmployee({
+      monthlySalary,
+      hireDate,
+      year,
+      semester,
+    });
+
+    return res.json(result);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.get("/prima/message-preview", async (req, res) => {
+  try {
+    const employeeId = String(req.query.employeeId ?? "").trim();
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const semester = parsePrimaSemester(req.query.semester);
+
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId es requerido" });
+    }
+
+    const message = await buildPrimaWhatsAppMessageForEmployee(
+      employeeId,
+      year,
+      semester
+    );
+    return res.json({ message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.post("/prima/send-whatsapp", async (req, res) => {
+  try {
+    const employeeId = String(req.body?.employeeId ?? "").trim();
+    const year = Number(req.body?.year) || new Date().getFullYear();
+    const semester = parsePrimaSemester(req.body?.semester);
+
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId es requerido" });
+    }
+
+    const result = await sendPrimaWhatsApp(employeeId, year, semester);
+    return res.json({ ok: true, ...result });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.post("/prima/send-whatsapp-all", async (req, res) => {
+  try {
+    const year = Number(req.body?.year) || new Date().getFullYear();
+    const semester = parsePrimaSemester(req.body?.semester);
+    const result = await sendAllPrimaWhatsApp(year, semester);
+    return res.json({ ok: true, ...result });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
 });
 
 // --- Horas extras mensuales ---
