@@ -757,6 +757,54 @@
       margin-bottom: 10px;
       line-height: 1.45;
     }
+    .v8-doc {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      background: #fffde7;
+      border: 1px solid #fff59d;
+      border-radius: var(--radius);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--color-text);
+    }
+    .v8-doc h3 {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      color: #e65100;
+    }
+    .v8-doc h3:not(:first-child) { margin-top: 10px; }
+    .v8-doc p { margin: 0 0 6px; color: var(--color-text-muted); }
+    .v8-doc table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0 8px;
+      font-size: 11px;
+    }
+    .v8-doc th, .v8-doc td {
+      border: 1px solid #ffe082;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    .v8-doc th { background: #fff8e1; font-weight: 600; }
+    .v8-doc code {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 11px;
+      background: #fff;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    .v8-doc ul { margin: 4px 0 8px 18px; padding: 0; }
+    .v8-doc li { margin-bottom: 4px; }
+    .v8-doc .v8-ejemplo {
+      margin: 6px 0;
+      padding: 8px 10px;
+      background: #fff;
+      border-left: 3px solid #1a6b5a;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      font-size: 11px;
+    }
+    .v8-doc .v8-ejemplo strong { color: var(--color-text); }
     .test-v8-row {
       display: flex;
       flex-wrap: wrap;
@@ -952,13 +1000,73 @@
 
 <details class="test-v8-panel" id="panelPruebasV8">
   <summary>Pruebas V8 — disponibilidad mensajeros</summary>
-  <p class="test-v8-note">
-    Envía señales a V8 (M1 Harold · M2 Diego · M3 Dilan). V8 solo entiende
-    <strong>Disponible</strong> / <strong>No disponible</strong> — el almuerzo en la planilla
-    se traduce así: <em>inicio almuerzo</em> = no disponible · <em>fin almuerzo</em> = disponible.
-    Los eventos que ya pasaron hoy no se reenvían.
-    <strong>Planilla día</strong> = vista previa de lo que se enviaría a V8.
-  </p>
+
+  <div class="v8-doc" aria-label="Documentación envío almuerzos a V8">
+    <h3>V8 solo recibe Disponible / No disponible</h3>
+    <p>
+      En la planilla editamos <strong>almuerzos</strong>; V8 recibe señales
+      <code>disponible: true</code> o <code>false</code> a una hora exacta (M1 Harold · M2 Diego · M3 Dilan).
+    </p>
+
+    <h3>Duración del almuerzo</h3>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Día</th>
+          <th scope="col">Celda planilla</th>
+          <th scope="col">No disponible</th>
+          <th scope="col">Disponible</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Lun–vie</td>
+          <td><code>12</code> o <code>12:00</code></td>
+          <td>12:00 (1 h)</td>
+          <td>13:00 (1:00 p.m.)</td>
+        </tr>
+        <tr>
+          <td>Lun–vie</td>
+          <td><code>1:00</code></td>
+          <td>13:00</td>
+          <td>14:00 (2:00 p.m.)</td>
+        </tr>
+        <tr>
+          <td>Sábado</td>
+          <td><code>1:00</code></td>
+          <td>13:00 (30 min)</td>
+          <td>13:30</td>
+        </tr>
+        <tr>
+          <td>Sábado</td>
+          <td><code>1:00-1:30</code></td>
+          <td>13:00</td>
+          <td>13:30</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Ejemplo 1 — Miércoles (Harold, almuerzo 12:00)</h3>
+    <div class="v8-ejemplo">
+      <strong>M1</strong> 12:00 → <strong>NO DISPONIBLE</strong><br />
+      <strong>M1</strong> 13:00 → <strong>DISPONIBLE</strong>
+    </div>
+
+    <h3>Ejemplo 2 — Sábado (Dilan, almuerzo 1:00-1:30)</h3>
+    <div class="v8-ejemplo">
+      <strong>M3</strong> 13:00 → <strong>NO DISPONIBLE</strong><br />
+      <strong>M3</strong> 13:30 → <strong>DISPONIBLE</strong>
+    </div>
+
+    <h3>Envío</h3>
+    <ul>
+      <li><strong>Planilla día</strong> — vista previa por mensajero (solo eventos pendientes hoy).</li>
+      <li><strong>Enviar programación del día</strong> — manda entrada, almuerzo y salida de los 3 mensajeros.</li>
+      <li>Los eventos que <strong>ya pasaron hoy</strong> no se reenvían.</li>
+      <li>Los horarios de almuerzo salen de la fila Alm. (Firebase <code>lunchOverrides</code>).</li>
+    </ul>
+  </div>
+
   <div class="test-v8-row">
     <label for="testV8Fecha">Fecha</label>
     <input type="date" id="testV8Fecha" aria-label="Fecha para envío de programación" />
@@ -1101,7 +1209,7 @@
 
 <!-- Orquestador principal -->
 <script src="js/turnos-auth.js?v=20260626a"></script>
-<script src="js/turnos.js?v=20260628c"></script>
+<script src="js/turnos.js?v=20260628d"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>
