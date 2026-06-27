@@ -51,14 +51,26 @@ const parseFecha = (raw: string | undefined): string | null => {
   return s;
 };
 
-/** POST /api/v8/sync-dia?fecha=YYYY-MM-DD — envía todos los eventos del día a V8 */
+const parseBoolQuery = (raw: string | undefined, defaultVal: boolean): boolean => {
+  if (raw == null || raw === "") return defaultVal;
+  const s = String(raw).trim().toLowerCase();
+  if (s === "0" || s === "false" || s === "no") return false;
+  if (s === "1" || s === "true" || s === "si" || s === "sí") return true;
+  return defaultVal;
+};
+
+/** POST /api/v8/sync-dia?fecha=YYYY-MM-DD — envía eventos pendientes del día a V8 */
 router.post("/sync-dia", requireV8Auth, async (req, res) => {
   const fecha =
     parseFecha(String(req.query.fecha || req.body?.fecha || "")) ||
     new Date().toISOString().slice(0, 10);
+  const omitirPasados = parseBoolQuery(
+    String(req.query.omitirPasados ?? req.body?.omitirPasados ?? ""),
+    true
+  );
 
   clearPlanillaCache();
-  const result = await syncDisponibilidadDia(fecha);
+  const result = await syncDisponibilidadDia(fecha, { omitirPasados });
   const status = result.ok ? 200 : result.error?.includes("API_KEY") ? 503 : 502;
   return res.status(status).json(result);
 });
@@ -68,8 +80,9 @@ router.get("/planilla-dia", requireV8Auth, async (req, res) => {
   const fecha =
     parseFecha(String(req.query.fecha || "")) ||
     new Date().toISOString().slice(0, 10);
+  const soloFuturos = parseBoolQuery(String(req.query.soloFuturos ?? ""), true);
 
-  const result = await previewDisponibilidadDia(fecha);
+  const result = await previewDisponibilidadDia(fecha, { soloFuturos });
   return res.json({ ok: !result.error, ...result });
 });
 

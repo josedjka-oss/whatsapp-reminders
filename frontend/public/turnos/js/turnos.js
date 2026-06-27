@@ -949,7 +949,7 @@
       sync?.endLocalSave?.(monthKey);
       if (btn && !quiet) {
         btn.disabled = false;
-        btn.textContent = labelPrev;
+        syncHistoricoUi(monthKey);
       }
     }
   };
@@ -1288,6 +1288,19 @@
   const CF_PROBAR_DISP = 'https://us-central1-cajacentro-v6.cloudfunctions.net/probarDisponibilidadMensajeros';
   const V8_RENDER_PROXY = '/api/turnos/v8-sync';
 
+  const formatV8EventoLinea = (ev) => {
+    const hora = String(ev.fechaHora || '').slice(11, 16) || '??:??';
+    const estado = ev.disponible ? 'DISPONIBLE' : 'NO DISPONIBLE';
+    return `M${ev.mensajero} ${hora} → ${estado}`;
+  };
+
+  const resumenEventosV8 = (eventos) =>
+    (eventos || [])
+      .slice()
+      .sort((a, b) => String(a.fechaHora).localeCompare(String(b.fechaHora)))
+      .map(formatV8EventoLinea)
+      .join(' · ');
+
   const fechaHoyInput = () => {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -1311,7 +1324,13 @@
         setStatus(data.v8.reason || 'Sin eventos pendientes para ese día.', 'warn');
         return data;
       }
-      setStatus(`V8 OK — ${n} evento(s) guardados (${data.fecha || fecha})`, 'ok');
+      const lista = resumenEventosV8(data.eventos);
+      setStatus(
+        lista
+          ? `V8 OK — ${n} evento(s): ${lista}`
+          : `V8 OK — ${n} evento(s) guardados (${data.fecha || fecha})`,
+        'ok'
+      );
       return data;
     } catch (e) {
       console.error(e);
@@ -1332,8 +1351,11 @@
       }
       const m = Number(mensajeroNum);
       const eventos = (data.eventos || []).filter((ev) => Number(ev.mensajero) === m);
+      const lista = resumenEventosV8(eventos);
       setStatus(
-        `Preview M${m} — ${eventos.length} evento(s) para ${fecha}`,
+        lista
+          ? `Preview M${m} — ${lista}`
+          : `Preview M${m} — sin eventos pendientes para ${fecha}`,
         eventos.length ? 'ok' : 'warn'
       );
       console.info('[V8 preview]', { fecha, mensajero: m, eventos });

@@ -221,8 +221,16 @@ export const getLunchOverride = (
   const ov =
     state.lunchOverrides?.[empId]?.[day] ??
     state.lunchOverrides?.[empId]?.[String(day)];
-  if (ov == null || String(ov).trim() === "") return "";
-  return normalizeLunchTime(String(ov));
+  if (ov != null && String(ov).trim() !== "") {
+    return normalizeLunchTime(String(ov));
+  }
+  const cell =
+    state.cells[empId]?.[day] ?? state.cells[empId]?.[String(day)];
+  const fromCell = cell?.lunch;
+  if (fromCell != null && String(fromCell).trim() !== "") {
+    return normalizeLunchTime(String(fromCell));
+  }
+  return "";
 };
 
 export const getEffectiveLunchForMessenger = (

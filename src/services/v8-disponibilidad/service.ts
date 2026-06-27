@@ -4,6 +4,7 @@ import { APP_TIMEZONE, isV8DisponibilidadConfigured } from "./constants";
 import {
   buildEventsForDay,
   filterEventsAtMinute,
+  filterEventsNotBeforeNow,
 } from "./event-builder";
 import { loadPlanillaForDate } from "./firestore-planilla";
 import { buildPayload, postDisponibilidadToV8 } from "./v8-client";
@@ -70,15 +71,19 @@ const logSendResult = async (
 };
 
 export const syncDisponibilidadDia = async (
-  fecha: string
+  fecha: string,
+  options: { omitirPasados?: boolean } = {}
 ): Promise<{
   ok: boolean;
   fecha: string;
   eventosGenerados: number;
   eventosEnviados: number;
+  eventosOmitidosPasados?: number;
+  eventos?: V8DisponibilidadEvento[];
   v8?: Record<string, unknown>;
   error?: string;
 }> => {
+  const omitirPasados = options.omitirPasados !== false;
   if (!isV8DisponibilidadConfigured()) {
     return {
       ok: false,
@@ -100,14 +105,29 @@ export const syncDisponibilidadDia = async (
     };
   }
 
-  const eventos = await filterAlreadySent(fecha, buildEventsForDay(state, fecha));
+  const now = new Date();
+  const allBuilt = buildEventsForDay(state, fecha);
+  const afterPast = omitirPasados
+    ? filterEventsNotBeforeNow(allBuilt, fecha, now)
+    : allBuilt;
+  const eventosOmitidosPasados = allBuilt.length - afterPast.length;
+  const eventos = await filterAlreadySent(fecha, afterPast);
+
   if (!eventos.length) {
     return {
       ok: true,
       fecha,
       eventosGenerados: 0,
       eventosEnviados: 0,
-      v8: { skipped: true, reason: "Sin eventos pendientes" },
+      eventosOmitidosPasados,
+      eventos: [],
+      v8: {
+        skipped: true,
+        reason:
+          eventosOmitidosPasados > 0
+            ? "Sin eventos pendientes (los pasados no se reenvían)"
+            : "Sin eventos pendientes",
+      },
     };
   }
 
@@ -128,6 +148,8 @@ export const syncDisponibilidadDia = async (
     fecha,
     eventosGenerados: eventos.length,
     eventosEnviados: ok ? eventos.length : 0,
+    eventosOmitidosPasados,
+    eventos,
     v8: response as unknown as Record<string, unknown>,
     error: ok ? undefined : response.error,
   };
@@ -177,10 +199,12 @@ export const processDisponibilidadMinute = async (
 };
 
 export const previewDisponibilidadDia = async (
-  fecha: string
+  fecha: string,
+  options: { soloFuturos?: boolean } = {}
 ): Promise<{
   fecha: string;
   eventos: V8DisponibilidadEvento[];
+  eventosOmitidosPasados?: number;
   error?: string;
 }> => {
   const state = await loadPlanillaForDate(fecha);
@@ -188,7 +212,18 @@ export const previewDisponibilidadDia = async (
     return { fecha, eventos: [], error: `Planilla ${fecha.slice(0, 7)} no disponible` };
   }
 
-  return { fecha, eventos: buildEventsForDay(state, fecha) };
+  const all = buildEventsForDay(state, fecha);
+  const soloFuturos = options.soloFuturos !== false;
+  if (!soloFuturos) {
+    return { fecha, eventos: all, eventosOmitidosPasados: 0 };
+  }
+  const now = new Date();
+  const futuros = filterEventsNotBeforeNow(all, fecha, now);
+  return {
+    fecha,
+    eventos: futuros,
+    eventosOmitidosPasados: all.length - futuros.length,
+  };
 };
 
 export { isSchedulerEnabled, isV8DisponibilidadConfigured };

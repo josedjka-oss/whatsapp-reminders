@@ -953,9 +953,11 @@
 <details class="test-v8-panel" id="panelPruebasV8">
   <summary>Pruebas V8 — disponibilidad mensajeros</summary>
   <p class="test-v8-note">
-    Envía señales a V8 (M1 Harold · M2 Diego · M3 Dilan).
-    <strong>Disponible / No disponible</strong> = efecto inmediato (como el botón en Gestión de mensajeros).
-    <strong>Planilla día</strong> = eventos de la planilla solo para ese mensajero.
+    Envía señales a V8 (M1 Harold · M2 Diego · M3 Dilan). V8 solo entiende
+    <strong>Disponible</strong> / <strong>No disponible</strong> — el almuerzo en la planilla
+    se traduce así: <em>inicio almuerzo</em> = no disponible · <em>fin almuerzo</em> = disponible.
+    Los eventos que ya pasaron hoy no se reenvían.
+    <strong>Planilla día</strong> = vista previa de lo que se enviaría a V8.
   </p>
   <div class="test-v8-row">
     <label for="testV8Fecha">Fecha</label>
@@ -1099,7 +1101,7 @@
 
 <!-- Orquestador principal -->
 <script src="js/turnos-auth.js?v=20260626a"></script>
-<script src="js/turnos.js?v=20260628b"></script>
+<script src="js/turnos.js?v=20260628c"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>

@@ -1,4 +1,6 @@
+import { formatInTimeZone } from "date-fns-tz";
 import {
+  APP_TIMEZONE,
   GRUPO_MENSAJEROS,
   MENSAJERO_V8_BY_EMP,
 } from "./constants";
@@ -129,12 +131,12 @@ export const buildEventsForMessengerDay = (
       disponible: false,
       hour: 9,
       minute: 0,
-      motivo: "Antes de entrada",
+      motivo: "No disponible",
       tipo: "des",
     });
   }
 
-  // Entrada
+  // Entrada → disponible
   const entradaParts = hourDecimalToTimeParts(entrada);
   pushEvent(eventos, {
     fecha,
@@ -142,11 +144,11 @@ export const buildEventsForMessengerDay = (
     disponible: true,
     hour: entradaParts.h,
     minute: entradaParts.m,
-    motivo: "Entrada",
+    motivo: "Disponible",
     tipo: "act",
   });
 
-  // Almuerzo
+  // Almuerzo (planilla) = no disponible al inicio, disponible al fin (V8 solo ve flags)
   const meta = getMonthMeta(monthKey);
   const lunchFranja = getEffectiveLunchForMessenger(state, empId, d, monthKey, meta);
   const { startMin, endMin } = parseLunchRange(lunchFranja, d.esSabado);
@@ -159,7 +161,7 @@ export const buildEventsForMessengerDay = (
     disponible: false,
     hour: lunchStart.hour,
     minute: lunchStart.minute,
-    motivo: "Inicio almuerzo",
+    motivo: "No disponible",
     tipo: "des",
   });
 
@@ -169,7 +171,7 @@ export const buildEventsForMessengerDay = (
     disponible: true,
     hour: lunchEnd.hour,
     minute: lunchEnd.minute,
-    motivo: "Fin almuerzo",
+    motivo: "Disponible",
     tipo: "act",
   });
 
@@ -181,7 +183,7 @@ export const buildEventsForMessengerDay = (
       disponible: false,
       hour: 17,
       minute: 0,
-      motivo: "Salida",
+      motivo: "No disponible",
       tipo: "des",
     });
   }
@@ -215,4 +217,17 @@ export const filterEventsAtMinute = (
 ): V8DisponibilidadEvento[] => {
   const target = formatFechaHora(fecha, hour, minute);
   return eventos.filter((e) => e.fechaHora === target);
+};
+
+/** Omite eventos cuya hora ya pasó (solo aplica si fecha es hoy en Bogotá). */
+export const filterEventsNotBeforeNow = (
+  eventos: V8DisponibilidadEvento[],
+  fecha: string,
+  now: Date = new Date()
+): V8DisponibilidadEvento[] => {
+  const today = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd");
+  if (fecha < today) return [];
+  if (fecha > today) return eventos;
+  const cutoff = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd'T'HH:mm:00");
+  return eventos.filter((e) => e.fechaHora >= cutoff);
 };
