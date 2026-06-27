@@ -9,6 +9,21 @@
 
   const READ_ONLY = window.TURNOS_READ_ONLY === true;
 
+  /** Desde julio 2026 WhatsApp usa el motor nuevo; antes muestra Firebase tal cual Caja Centro. */
+  const WHATSAPP_LIVE_FROM_MONTH = '2026-07';
+
+  const isLegacyFrozenMonth = (monthKey) => {
+    if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return false;
+    return monthKey < WHATSAPP_LIVE_FROM_MONTH;
+  };
+
+  const syncHistoricoUi = (monthKey) => {
+    document.body.classList.toggle('modo-historico', isLegacyFrozenMonth(monthKey));
+  };
+
+  const isSheetReadOnly = () =>
+    READ_ONLY || isLegacyFrozenMonth(state.monthKey || getActiveMonthKey());
+
   // ── ALIASES ENGINE ─────────────────────────────────────────────────────────
 
   const {
@@ -343,7 +358,7 @@
 
   let autoSaveTimer = null;
   const scheduleAutoSave = () => {
-    if (READ_ONLY) return;
+    if (isSheetReadOnly()) return;
     clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => { void saveToFirebase(true); }, 900);
   };
@@ -478,6 +493,7 @@
   // ── RENDER CELDAS ──────────────────────────────────────────────────────────
 
   const renderDayCells = (empId, rowKind, meta, monthKey, chunks, aseoMap, cocinaMap, basuraMap) => {
+    const sheetRo = isSheetReadOnly();
     const empLabel = EMPLEADOS.find(e => e.id === empId)?.name || empId;
     const roVal = (v) => {
       const t = formatAmDisplay(v);
@@ -507,7 +523,7 @@
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
             <div class="celda-aseo-inner">
               <span class="aseo-in-label">Aseo</span>
-              ${READ_ONLY
+              ${sheetRo
                 ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} aseo">${amDisplayForCell(empId, d, c) || '–'}</span>`
                 : `<input type="text" inputmode="text" class="cell-in"
                 data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
@@ -518,7 +534,7 @@
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
             <div class="celda-cocina-inner">
               <span class="cocina-in-label">Cocina</span>
-              ${READ_ONLY
+              ${sheetRo
                 ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} cocina">${amDisplayForCell(empId, d, c) || '–'}</span>`
                 : `<input type="text" inputmode="text" class="cell-in"
                 data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
@@ -527,7 +543,7 @@
             </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
-            ${READ_ONLY
+            ${sheetRo
               ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} entrada">${amDisplayForCell(empId, d, c) || roVal(c.am)}</span>`
               : `<input type="text" inputmode="text" class="cell-in"
               data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
@@ -542,7 +558,7 @@
           html += `${openTdAmPm(marcado, 'pm', c, d, tdFlags)}
             <div class="celda-basura-inner">
               <span class="basura-in-label">Basura</span>
-              ${READ_ONLY
+              ${sheetRo
                 ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} basura">${pmDisplayForCell(empId, d, c) || '–'}</span>`
                 : `<input type="text" inputmode="text" class="cell-in"
                 data-cell="${empId}-${d.day}-pm" value="${pmDisplayForCell(empId, d, c)}"
@@ -551,7 +567,7 @@
             </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'pm', c, d, tdFlags)}
-            ${READ_ONLY
+            ${sheetRo
               ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} salida">${roVal(c.pm)}</span>`
               : `<input type="text" inputmode="text" class="cell-in"
               data-cell="${empId}-${d.day}-pm" value="${pmDisplayForCell(empId, d, c)}"
@@ -566,7 +582,7 @@
           const txt    = getLunchDisplay(empId, d, monthKey, state, meta) || '';
           const manual = hasManualLunchOverride(empId, d, monthKey, state, meta);
           html += `<td class="lunch-cell${oCls}">
-            ${READ_ONLY || !manual
+            ${sheetRo || !manual
               ? `<span class="lunch-time-txt cell-readonly">${txt || '–'}</span>`
               : `<input type="text" inputmode="text" class="cell-in cell-in-lunch"
               data-cell="${empId}-${d.day}-lunch"
@@ -594,7 +610,7 @@
   const render = (skipEnsure = true) => {
     const monthKey = getActiveMonthKey();
     syncMonthPicker(monthKey);
-    if (!skipEnsure) ensureStateShape(state, monthKey);
+    if (!skipEnsure && !isLegacyFrozenMonth(monthKey)) ensureStateShape(state, monthKey);
 
     const meta        = getMonthMeta(monthKey);
     const chunks      = buildWeekChunks(meta);
@@ -653,7 +669,7 @@
   // ── EVENT LISTENERS ────────────────────────────────────────────────────────
 
   const attachListeners = (wrap, monthKey) => {
-    if (READ_ONLY) return;
+    if (isSheetReadOnly()) return;
 
     // Edición manual am/pm — trío/dúos reparan días siguientes; am/pm recalcula aseo/basura
     wrap.querySelectorAll('.cell-in:not(.cell-in-lunch)').forEach((inp) => {
@@ -697,6 +713,15 @@
     }
 
     const monthKey = state.monthKey || getActiveMonthKey();
+    if (isLegacyFrozenMonth(monthKey)) {
+      if (!quiet) {
+        setStatus(
+          'Mes histórico (Caja Centro): junio y anteriores no se modifican desde WhatsApp.',
+          'warn'
+        );
+      }
+      return false;
+    }
     const planillaRevision = Date.now();
     const sync = window.PLANILLA_FIRESTORE_SYNC;
     sync?.beginLocalSave?.(monthKey, planillaRevision);
@@ -808,6 +833,11 @@
         fromCache = true;
       }
       if (!snap.exists) {
+        if (isLegacyFrozenMonth(monthKey)) {
+          setStatus(`No hay planilla en Firebase para ${monthKey} (mes histórico).`, 'err');
+          syncHistoricoUi(monthKey);
+          return;
+        }
         await bootstrapEmptyMonth(monthKey);
         startPlanillaLiveSync(monthKey);
         return;
@@ -822,7 +852,13 @@
         );
         return;
       }
-      setStatus(READ_ONLY ? 'Consulta — datos cargados.' : 'Datos cargados desde Firebase.', 'ok');
+      setStatus(
+        READ_ONLY || isLegacyFrozenMonth(monthKey)
+          ? 'Consulta — datos cargados (mes histórico Caja Centro).'
+          : 'Datos cargados desde Firebase.',
+        'ok'
+      );
+      syncHistoricoUi(monthKey);
     } catch (e) {
       console.error('Turnos loadMonthOrGenerate', monthKey, e);
       const detail = e?.message ? String(e.message) : String(e);
@@ -918,15 +954,27 @@
       }
     }
 
-    purgeStaleLunchOverrides(state, monthKey);
-    ensureStateShape(state, monthKey);
-    overlayLockedCells(savedCells, savedLocks);
-    state.manualAmPmLocks = savedLocks;
+    if (isLegacyFrozenMonth(monthKey) && savedCells) {
+      state.cells = cloneCells(savedCells);
+      if (payload?.horasExtras && typeof payload.horasExtras === 'object') {
+        state.horasExtras = cloneJson(payload.horasExtras);
+      }
+      state.manualAmPmLocks = savedLocks;
+    } else {
+      purgeStaleLunchOverrides(state, monthKey);
+      ensureStateShape(state, monthKey);
+      overlayLockedCells(savedCells, savedLocks);
+      state.manualAmPmLocks = savedLocks;
+    }
 
     await loadAdjacentMonthCells(monthKey);
-    rebalanceAfterCrossMonth(monthKey);
-    recalcExtras(state, monthKey);
+    if (isLegacyFrozenMonth(monthKey)) {
+      recalcExtras(state, monthKey);
+    } else {
+      rebalanceAfterCrossMonth(monthKey);
+    }
     render(true);
+    syncHistoricoUi(monthKey);
   };
 
   // ── EXPORT EXCEL ───────────────────────────────────────────────────────────
