@@ -18,11 +18,24 @@
   };
 
   const syncHistoricoUi = (monthKey) => {
-    document.body.classList.toggle('modo-historico', isLegacyFrozenMonth(monthKey));
+    const legacy = isLegacyFrozenMonth(monthKey);
+    document.body.classList.toggle('modo-historico', legacy);
+    const btn = el('btnGuardarFirebase');
+    if (btn) {
+      btn.textContent = legacy && !READ_ONLY
+        ? 'Guardar almuerzos'
+        : 'Guardar en Firebase';
+    }
   };
 
-  const isSheetReadOnly = () =>
+  /** Consulta o mes histórico: am/pm bloqueados. */
+  const isAmPmReadOnly = () =>
     READ_ONLY || isLegacyFrozenMonth(state.monthKey || getActiveMonthKey());
+
+  /** Planilla editable: almuerzos siempre editables (incl. junio histórico). */
+  const isLunchEditable = () => !READ_ONLY;
+
+  const isSheetReadOnly = () => isAmPmReadOnly();
 
   // ── ALIASES ENGINE ─────────────────────────────────────────────────────────
 
@@ -184,15 +197,15 @@
 
   const getLunchDisplayForSheet = (empId, d, monthKey, stateRef, meta) => {
     if (d.noLaborable) return CFG.NO_LAB_MARK;
+    const manual = getLunchOverride(stateRef, empId, d.day);
+    if (manual != null && String(manual).trim() !== '') {
+      return String(manual).trim();
+    }
     if (!isLegacyFrozenMonth(monthKey)) {
       return getLunchDisplay(empId, d, monthKey, stateRef, meta);
     }
     const caja = window.ENGINE_LUNCH_CAJA;
     if (!caja?.getLunchDisplay) return '';
-    const manual = caja.getLunchOverride?.(stateRef, empId, d.day);
-    if (manual != null && String(manual).trim() !== '') {
-      return String(manual).trim();
-    }
     return caja.getLunchDisplay(
       empId,
       d,
@@ -421,7 +434,7 @@
 
   let autoSaveTimer = null;
   const scheduleAutoSave = () => {
-    if (isSheetReadOnly()) return;
+    if (READ_ONLY) return;
     clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => { void saveToFirebase(true); }, 900);
   };
@@ -453,8 +466,61 @@
 
   // ── COLLECT FROM DOM ───────────────────────────────────────────────────────
 
+  const collectLunchFromDom = () => {
+    const monthKey = getActiveMonthKey();
+    const meta = getMonthMeta(monthKey);
+    const wrap = el('sheetWrap');
+    const q    = (sel) => (wrap ? wrap.querySelector(sel) : document.querySelector(sel));
+    const legacy = isLegacyFrozenMonth(monthKey);
+
+    if (!state.lunchOverrides) state.lunchOverrides = {};
+
+    EMPLEADOS.forEach((emp) => {
+      meta.days.forEach((d) => {
+        const { day, noLaborable } = d;
+        if (noLaborable) {
+          if (state.lunchOverrides[emp.id]?.[day]) {
+            delete state.lunchOverrides[emp.id][day];
+            if (Object.keys(state.lunchOverrides[emp.id]).length === 0) {
+              delete state.lunchOverrides[emp.id];
+            }
+          }
+          return;
+        }
+        const lunchIn = q(`input[data-cell="${emp.id}-${day}-lunch"]`);
+        if (!lunchIn) return;
+        const raw = lunchIn.value.trim();
+        if (!raw) {
+          if (state.lunchOverrides[emp.id]?.[day]) {
+            delete state.lunchOverrides[emp.id][day];
+            if (Object.keys(state.lunchOverrides[emp.id]).length === 0) {
+              delete state.lunchOverrides[emp.id];
+            }
+          }
+          return;
+        }
+        const normalized = normalizeLunchTime(raw);
+        if (!state.lunchOverrides[emp.id]) state.lunchOverrides[emp.id] = {};
+        state.lunchOverrides[emp.id][day] = normalized;
+        if (
+          !legacy
+          && !shouldKeepLunchOverride(emp.id, d, monthKey, state, meta)
+        ) {
+          delete state.lunchOverrides[emp.id][day];
+          if (Object.keys(state.lunchOverrides[emp.id]).length === 0) {
+            delete state.lunchOverrides[emp.id];
+          }
+        }
+      });
+    });
+  };
+
   const collectFromDom = () => {
     const monthKey = getActiveMonthKey();
+    if (isLegacyFrozenMonth(monthKey)) {
+      collectLunchFromDom();
+      return;
+    }
     const meta = getMonthMeta(monthKey);
     const wrap = el('sheetWrap');
     const q    = (sel) => (wrap ? wrap.querySelector(sel) : document.querySelector(sel));
@@ -556,7 +622,8 @@
   // ── RENDER CELDAS ──────────────────────────────────────────────────────────
 
   const renderDayCells = (empId, rowKind, meta, monthKey, chunks, aseoMap, cocinaMap, basuraMap) => {
-    const sheetRo = isSheetReadOnly();
+    const amPmRo = isAmPmReadOnly();
+    const lunchEditable = isLunchEditable();
     const legacySheet = isLegacyFrozenMonth(monthKey);
     const empLabel = EMPLEADOS.find(e => e.id === empId)?.name || empId;
     const roVal = (v) => {
@@ -590,7 +657,7 @@
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
             <div class="celda-aseo-inner">
               <span class="aseo-in-label">Aseo</span>
-              ${sheetRo
+              ${amPmRo
                 ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} aseo">${amDisplayForCell(empId, d, c) || '–'}</span>`
                 : `<input type="text" inputmode="text" class="cell-in"
                 data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
@@ -601,7 +668,7 @@
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
             <div class="celda-cocina-inner">
               <span class="cocina-in-label">Cocina</span>
-              ${sheetRo
+              ${amPmRo
                 ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} cocina">${amDisplayForCell(empId, d, c) || '–'}</span>`
                 : `<input type="text" inputmode="text" class="cell-in"
                 data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
@@ -610,7 +677,7 @@
             </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'am', c, d, tdFlags)}
-            ${sheetRo
+            ${amPmRo
               ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} entrada">${amDisplayForCell(empId, d, c) || roVal(c.am)}</span>`
               : `<input type="text" inputmode="text" class="cell-in"
               data-cell="${empId}-${d.day}-am" value="${amDisplayForCell(empId, d, c)}"
@@ -625,7 +692,7 @@
           html += `${openTdAmPm(marcado, 'pm', c, d, tdFlags)}
             <div class="celda-basura-inner">
               <span class="basura-in-label">Basura</span>
-              ${sheetRo
+              ${amPmRo
                 ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} basura">${pmDisplayForCell(empId, d, c) || '–'}</span>`
                 : `<input type="text" inputmode="text" class="cell-in"
                 data-cell="${empId}-${d.day}-pm" value="${pmDisplayForCell(empId, d, c)}"
@@ -634,7 +701,7 @@
             </div></td>`;
         } else {
           html += `${openTdAmPm(marcado, 'pm', c, d, tdFlags)}
-            ${sheetRo
+            ${amPmRo
               ? `<span class="cell-readonly" aria-label="${empLabel} día ${d.day} salida">${roVal(c.pm)}</span>`
               : `<input type="text" inputmode="text" class="cell-in"
               data-cell="${empId}-${d.day}-pm" value="${pmDisplayForCell(empId, d, c)}"
@@ -647,16 +714,17 @@
           html += `<td class="nl">${NO_LAB_MARK}</td>`;
         } else {
           const txt    = getLunchDisplayForSheet(empId, d, monthKey, state, meta) || '';
-          const manual = !legacySheet && hasManualLunchOverride(empId, d, monthKey, state, meta);
           html += `<td class="lunch-cell${oCls}">
-            ${sheetRo || !manual
-              ? `<span class="lunch-time-txt cell-readonly">${txt || '–'}</span>`
-              : `<input type="text" inputmode="text" class="cell-in cell-in-lunch"
+            ${lunchEditable
+              ? `<input type="text" inputmode="text" class="cell-in cell-in-lunch"
               data-cell="${empId}-${d.day}-lunch"
               value="${txt}"
               placeholder="12:30"
-              title="Almuerzo manual (solo si difiere del automático). Vacío = horario automático."
-              aria-label="${empLabel} día ${d.day} almuerzo" />`}</td>`;
+              title="${legacySheet
+                ? 'Almuerzo manual — se guarda en Firebase (entradas/salidas bloqueadas).'
+                : 'Almuerzo manual. Vacío = horario automático.'}"
+              aria-label="${empLabel} día ${d.day} almuerzo" />`
+              : `<span class="lunch-time-txt cell-readonly">${txt || '–'}</span>`}</td>`;
         }
       }
 
@@ -742,35 +810,43 @@
   // ── EVENT LISTENERS ────────────────────────────────────────────────────────
 
   const attachListeners = (wrap, monthKey) => {
-    if (isSheetReadOnly()) return;
+    if (READ_ONLY) return;
 
-    // Edición manual am/pm — trío/dúos reparan días siguientes; am/pm recalcula aseo/basura
-    wrap.querySelectorAll('.cell-in:not(.cell-in-lunch)').forEach((inp) => {
-      inp.addEventListener('change', () => {
-        refreshAseoBasuraFromDom();
+    const legacy = isLegacyFrozenMonth(monthKey);
+
+    if (!legacy) {
+      // Edición manual am/pm — trío/dúos reparan días siguientes; am/pm recalcula aseo/basura
+      wrap.querySelectorAll('.cell-in:not(.cell-in-lunch)').forEach((inp) => {
+        inp.addEventListener('change', () => {
+          refreshAseoBasuraFromDom();
+        });
+        inp.addEventListener('blur', (ev) => {
+          const raw = ev.target?.getAttribute('data-cell') || '';
+          const m = /^(.+)-(\d+)-(am|pm)$/.exec(raw);
+          if (!m) return;
+          lockAmPmField(m[1], Number(m[2]), m[3]);
+          collectFromDom();
+          if (FORWARD_REPAIR_IDS.has(m[1])) {
+            runMessengerForwardRepair(state, monthKey, Number(m[2]), m[1]);
+          } else {
+            rebalanceAfterCrossMonth(monthKey);
+          }
+          render(true);
+          flushPendingPlanillaSync();
+          scheduleAutoSave();
+        });
       });
-      inp.addEventListener('blur', (ev) => {
-        const raw = ev.target?.getAttribute('data-cell') || '';
-        const m = /^(.+)-(\d+)-(am|pm)$/.exec(raw);
-        if (!m) return;
-        lockAmPmField(m[1], Number(m[2]), m[3]);
-        collectFromDom();
-        if (FORWARD_REPAIR_IDS.has(m[1])) {
-          runMessengerForwardRepair(state, monthKey, Number(m[2]), m[1]);
-        } else {
-          rebalanceAfterCrossMonth(monthKey);
-        }
-        render(true);
-        flushPendingPlanillaSync();
-        scheduleAutoSave();
-      });
-    });
+    }
 
     wrap.querySelectorAll('.cell-in-lunch').forEach((inp) => {
       inp.addEventListener('blur', () => {
-        collectFromDom();
+        collectLunchFromDom();
         render(true);
-        flushPendingPlanillaSync();
+        if (legacy) {
+          scheduleAutoSave();
+        } else {
+          flushPendingPlanillaSync();
+        }
       });
     });
 
@@ -786,15 +862,7 @@
     }
 
     const monthKey = state.monthKey || getActiveMonthKey();
-    if (isLegacyFrozenMonth(monthKey)) {
-      if (!quiet) {
-        setStatus(
-          'Mes histórico (Caja Centro): junio y anteriores no se modifican desde WhatsApp.',
-          'warn'
-        );
-      }
-      return false;
-    }
+    const legacy = isLegacyFrozenMonth(monthKey);
     const planillaRevision = Date.now();
     const sync = window.PLANILLA_FIRESTORE_SYNC;
     sync?.beginLocalSave?.(monthKey, planillaRevision);
@@ -803,14 +871,43 @@
     const labelPrev = btn?.textContent || '';
     if (btn && !quiet) {
       btn.disabled = true;
-      btn.textContent = 'Guardando…';
+      btn.textContent = legacy ? 'Guardando almuerzos…' : 'Guardando…';
     }
-    if (!quiet) setStatus('Guardando en Firebase…', '');
+    if (!quiet) {
+      setStatus(
+        legacy ? 'Guardando almuerzos en Firebase…' : 'Guardando en Firebase…',
+        ''
+      );
+    }
 
     try {
       if (document.activeElement?.classList?.contains('cell-in')) {
         document.activeElement.blur();
       }
+
+      if (legacy) {
+        collectLunchFromDom();
+        const payload = {
+          monthKey,
+          lunchOverrides: cloneJson(state.lunchOverrides),
+          planillaRevision,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        const docRef = db.collection(COLLECTION).doc(monthKey);
+        await docRef.set(payload, { merge: true });
+
+        const verifySnap = await docRef.get({ source: 'server' });
+        const savedRev = verifySnap.data()?.planillaRevision;
+        if (!verifySnap.exists || savedRev !== planillaRevision) {
+          throw new Error('El servidor no confirmó el guardado de almuerzos.');
+        }
+
+        render(true);
+        if (!quiet) setStatus('Almuerzos guardados en Firebase.', 'ok');
+        else setStatus('Almuerzos guardados automáticamente.', 'ok');
+        return true;
+      }
+
       collectFromDom();
       lockVisibleAmPmFromDom();
       const meta = getMonthMeta(monthKey);
@@ -926,9 +1023,11 @@
         return;
       }
       setStatus(
-        READ_ONLY || isLegacyFrozenMonth(monthKey)
+        READ_ONLY
           ? 'Consulta — datos cargados (mes histórico Caja Centro).'
-          : 'Datos cargados desde Firebase.',
+          : isLegacyFrozenMonth(monthKey)
+            ? 'Mes histórico — entradas/salidas bloqueadas; almuerzos editables. Pulse Guardar almuerzos.'
+            : 'Datos cargados desde Firebase.',
         'ok'
       );
       syncHistoricoUi(monthKey);
