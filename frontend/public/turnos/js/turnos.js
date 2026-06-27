@@ -1058,10 +1058,63 @@
   // ── PRUEBAS V8 — DISPONIBILIDAD MENSAJEROS ───────────────────────────────
 
   const CF_PROBAR_DISP = 'https://us-central1-cajacentro-v6.cloudfunctions.net/probarDisponibilidadMensajeros';
+  const V8_RENDER_PROXY = '/api/turnos/v8-sync';
 
   const fechaHoyInput = () => {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  };
+
+  const callRenderV8SyncDia = async (fecha) => {
+    setStatus('Enviando programación del día a V8 (Render)…', '');
+    try {
+      const res = await fetch(V8_RENDER_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setStatus(data.error || data.v8?.error || `Error Render (${res.status})`, 'err');
+        return data;
+      }
+      const n = data.v8?.eventosGuardados ?? data.eventosEnviados ?? data.eventosGenerados ?? 0;
+      if (data.v8?.skipped) {
+        setStatus(data.v8.reason || 'Sin eventos pendientes para ese día.', 'warn');
+        return data;
+      }
+      setStatus(`V8 OK — ${n} evento(s) guardados (${data.fecha || fecha})`, 'ok');
+      return data;
+    } catch (e) {
+      console.error(e);
+      setStatus('Error de red al contactar Render/V8.', 'err');
+      return null;
+    }
+  };
+
+  const callRenderV8PlanillaDia = async (fecha, mensajeroNum) => {
+    setStatus('Consultando eventos del día en Render…', '');
+    try {
+      const url = `${V8_RENDER_PROXY}?fecha=${encodeURIComponent(fecha)}`;
+      const res = await fetch(url, { method: 'GET' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setStatus(data.error || `Error Render (${res.status})`, 'err');
+        return data;
+      }
+      const m = Number(mensajeroNum);
+      const eventos = (data.eventos || []).filter((ev) => Number(ev.mensajero) === m);
+      setStatus(
+        `Preview M${m} — ${eventos.length} evento(s) para ${fecha}`,
+        eventos.length ? 'ok' : 'warn'
+      );
+      console.info('[V8 preview]', { fecha, mensajero: m, eventos });
+      return { ...data, eventosFiltrados: eventos };
+    } catch (e) {
+      console.error(e);
+      setStatus('Error de red al contactar Render.', 'err');
+      return null;
+    }
   };
 
   const callProbarV8 = async (params) => {
@@ -1105,7 +1158,7 @@
 
     el('btnTestSyncDia')?.addEventListener('click', () => {
       const fecha = el('testV8Fecha')?.value || fechaHoyInput();
-      void callProbarV8({ accion: 'sync-dia', fecha });
+      void callRenderV8SyncDia(fecha);
     });
 
     panel.querySelectorAll('[data-test-disp]').forEach((btn) => {
@@ -1121,11 +1174,7 @@
     panel.querySelectorAll('[data-test-planilla]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const fecha = el('testV8Fecha')?.value || fechaHoyInput();
-        void callProbarV8({
-          accion: 'planilla-dia',
-          mensajero: btn.getAttribute('data-mensajero'),
-          fecha,
-        });
+        void callRenderV8PlanillaDia(fecha, btn.getAttribute('data-mensajero'));
       });
     });
   };
@@ -1217,7 +1266,7 @@
         <span class="wa-phone-name wa-phone-name-fixed">${escapeHtml(WA_CONTACT_PRUEBA.name)}</span>
         <span class="wa-task-badges">
           <span class="wa-badge wa-badge-aseo">Aseo</span>
-          <span class="wa-badge wa-badge-cocina">Cocina</span>
+          <span class="wa-badge wa-badge-cocina">Cocina-Pasillo</span>
           <span class="wa-badge wa-badge-basura">Basura</span>
         </span>
         <input type="tel" class="wa-phone-input" data-wa-phone="${WA_CONTACT_PRUEBA.id}"
@@ -1537,7 +1586,15 @@
       });
       const data = await res.json();
       if (!data.ok) {
-        setStatus(data.error || data.render?.error || 'Error WhatsApp.', 'err');
+        const errText = data.error || data.render?.error || '';
+        const renderViejo = errText.includes('ASEO_RECEPCION o SACAR_BASURA')
+          && !errText.includes('COCINA');
+        setStatus(
+          renderViejo
+            ? 'Render sin actualizar: falta deploy con soporte COCINA. Redeploy en Render dashboard.'
+            : (errText || 'Error WhatsApp.'),
+          'err',
+        );
         setWaPreview(JSON.stringify(data, null, 2));
         return data;
       }

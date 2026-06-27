@@ -1,0 +1,75 @@
+import type { MessengerEmpId } from "./types";
+
+export const APP_TIMEZONE = "America/Bogota";
+export const PLANILLA_COLLECTION = "programacionAlmuerzos";
+
+export const GRUPO_MENSAJEROS: MessengerEmpId[] = [
+  "harold_paipa",
+  "diego_lozano",
+  "dilan_toro",
+];
+
+export const MENSAJERO_V8_BY_EMP: Record<MessengerEmpId, number> = {
+  harold_paipa: 1,
+  diego_lozano: 2,
+  dilan_toro: 3,
+};
+
+export const EMP_BY_MENSAJERO_V8: Record<number, MessengerEmpId> = {
+  1: "harold_paipa",
+  2: "diego_lozano",
+  3: "dilan_toro",
+};
+
+export const TRIO_ROW_BY_ID: Record<MessengerEmpId, number> = {
+  harold_paipa: 0,
+  dilan_toro: 1,
+  diego_lozano: 2,
+};
+
+export const ALMUERZOS_MENSAJEROS = ["12:00", "1:00", "2:00"] as const;
+export const ALMUERZOS_SABADO = ["12:30", "1:00", "1:30"] as const;
+
+export const MINUTOS_ALMUERZO_LUN_VIE = 60;
+export const MINUTOS_ALMUERZO_SAB = 30;
+
+export const FESTIVOS_CO: Record<number, string[]> = {
+  2024: [
+    "2024-01-01", "2024-01-08", "2024-03-25", "2024-03-28", "2024-03-29", "2024-05-01",
+    "2024-05-13", "2024-06-03", "2024-06-10", "2024-07-01", "2024-07-20", "2024-08-07",
+    "2024-08-19", "2024-10-14", "2024-11-04", "2024-11-11", "2024-12-08", "2024-12-25",
+  ],
+  2025: [
+    "2025-01-01", "2025-01-06", "2025-03-24", "2025-04-17", "2025-04-18", "2025-05-01",
+    "2025-06-02", "2025-06-23", "2025-06-30", "2025-07-20", "2025-08-07", "2025-08-18",
+    "2025-10-13", "2025-11-03", "2025-11-17", "2025-12-08", "2025-12-25",
+  ],
+  2026: [
+    "2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01",
+    "2026-05-18", "2026-06-08", "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07",
+    "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16", "2026-12-08", "2026-12-25",
+  ],
+  2027: [
+    "2027-01-01", "2027-01-11", "2027-03-22", "2027-03-25", "2027-03-26", "2027-05-01",
+    "2027-05-10", "2027-05-31", "2027-06-07", "2027-07-05", "2027-07-20", "2027-08-07",
+    "2027-08-16", "2027-10-18", "2027-11-01", "2027-11-15", "2027-12-08", "2027-12-25",
+  ],
+  2028: [
+    "2028-01-01", "2028-01-10", "2028-03-20", "2028-04-13", "2028-04-14", "2028-05-01",
+    "2028-05-29", "2028-06-19", "2028-06-26", "2028-07-03", "2028-07-20", "2028-08-07",
+    "2028-08-21", "2028-10-16", "2028-11-06", "2028-11-13", "2028-12-08", "2028-12-25",
+  ],
+};
+
+export const V8_DISPONIBILIDAD_URL =
+  process.env.V8_DISPONIBILIDAD_URL?.trim() ||
+  process.env.V8_WEBHOOK_URL?.trim() ||
+  "https://us-central1-ultralents-v3-2025.cloudfunctions.net/recibirHorariosDisponibilidad";
+
+export const getV8DisponibilidadApiKey = (): string =>
+  process.env.V8_DISPONIBILIDAD_API_KEY?.trim() ||
+  process.env.V8_API_KEY?.trim() ||
+  "";
+
+export const isV8DisponibilidadConfigured = (): boolean =>
+  Boolean(getV8DisponibilidadApiKey());

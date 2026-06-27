@@ -219,3 +219,24 @@ model NominaScheduleConfig {
   updatedAt      DateTime @updatedAt
 }
 
+// --- V8 disponibilidad mensajeros (Harold / Diego / Dilan) ---
+
+model V8DisponibilidadLog {
+  id           String   @id @default(uuid())
+  eventId      String
+  fecha        String
+  mensajero    Int
+  fechaHora    String
+  disponible   Boolean
+  motivo       String?
+  requestBody  Json?
+  responseBody Json?
+  ok           Boolean  @default(false)
+  attempts     Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  @@unique([eventId, fecha])
+  @@index([fecha, fechaHora])
+  @@index([ok])
+}
+

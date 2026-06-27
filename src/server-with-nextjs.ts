@@ -16,8 +16,10 @@ import messagesRouter from "./routes/messages";
 import aiRouter from "./routes/ai";
 import integrationFirebaseRouter from "./routes/integration-firebase";
 import nominaRouter from "./routes/nomina";
+import v8DisponibilidadRouter from "./routes/v8-disponibilidad";
 import { startScheduler } from "./services/scheduler";
 import { startNominaScheduler } from "./services/nomina-scheduler";
+import { startV8DisponibilidadScheduler } from "./services/v8-disponibilidad-scheduler";
 import next from "next";
 
 // Cargar variables de entorno
@@ -91,6 +93,7 @@ app.use("/api/messages", messagesRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/integration", integrationFirebaseRouter);
 app.use("/api/nomina", nominaRouter);
+app.use("/api/v8", v8DisponibilidadRouter);
 app.use("/webhooks", webhooksRouter);
 
 // Importante: abrir el puerto ANTES de nextApp.prepare(). Si prepare() tarda, el
@@ -146,6 +149,7 @@ async function main() {
     try {
       startScheduler();
       startNominaScheduler();
+      startV8DisponibilidadScheduler();
       console.log("[INIT] ✅ Scheduler iniciado");
     } catch (schedError: any) {
       console.error("[INIT] ❌ Error scheduler:", schedError);

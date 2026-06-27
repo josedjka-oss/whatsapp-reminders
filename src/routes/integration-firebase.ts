@@ -80,7 +80,7 @@ const normalizeTaskKind = (raw: unknown): TaskKind | null => {
   if (s === "ASEO_RECEPCION" || s === "ASEO" || s === "RECEPCION") {
     return "ASEO_RECEPCION";
   }
-  if (s === "COCINA_RECEPCION" || s === "COCINA") {
+  if (s === "COCINA_RECEPCION" || s === "COCINA" || s === "COCINA_PASILLO" || s === "ASEO_COCINA_PASILLO") {
     return "COCINA_RECEPCION";
   }
   if (s === "SACAR_BASURA" || s === "BASURA") {
@@ -103,6 +103,19 @@ const buildIntegratedReminderBody = (
   });
   return `${meta.label} — ${datePart}, ${meta.timeLabel}`;
 };
+
+/** Versión del contrato de tareas (útil para verificar deploy en Render). */
+export const INTEGRATION_TASKS_VERSION = "2026-06-26-cocina";
+
+router.get("/firebase/tasks", (_req, res) => {
+  return res.json({
+    version: INTEGRATION_TASKS_VERSION,
+    tasks: Object.keys(TASK_META),
+    labels: Object.fromEntries(
+      (Object.keys(TASK_META) as TaskKind[]).map((k) => [k, TASK_META[k].label])
+    ),
+  });
+});
 
 /**
  * Solo WHATS arma el texto y envía por Twilio. La otra aplicación sólo ordena teléfono + tipo (+ día opcional).

@@ -14,8 +14,10 @@ import migrateRouter from "./routes/migrate";
 // import checkSandboxRouter from "./routes/check-sandbox"; // Deshabilitado: Ya no usamos Sandbox
 import integrationFirebaseRouter from "./routes/integration-firebase";
 import nominaRouter from "./routes/nomina";
+import v8DisponibilidadRouter from "./routes/v8-disponibilidad";
 import { startScheduler } from "./services/scheduler";
 import { startNominaScheduler } from "./services/nomina-scheduler";
+import { startV8DisponibilidadScheduler } from "./services/v8-disponibilidad-scheduler";
 
 // Cargar variables de entorno
 dotenv.config();
@@ -82,6 +84,7 @@ app.use("/api/whatsapp-senders", whatsappSendersRouter);
 // app.use("/api/check-sandbox", checkSandboxRouter); // Deshabilitado: Ya no usamos Sandbox
 app.use("/api/integration", integrationFirebaseRouter);
 app.use("/api/nomina", nominaRouter);
+app.use("/api/v8", v8DisponibilidadRouter);
 app.use("/webhooks", webhooksRouter);
 
 // Servir Next.js estático (solo en producción, si existe)
@@ -111,6 +114,7 @@ app.get("/", (req, res) => {
         webhooks: "/webhooks/twilio/whatsapp",
         integrationFirebase: "POST /api/integration/firebase/whatsapp",
         nomina: "/api/nomina",
+        v8Disponibilidad: "POST /api/v8/sync-dia, GET /api/v8/planilla-dia",
         health: "/health",
       },
   });
@@ -146,6 +150,7 @@ async function main() {
     console.log("[INIT] Iniciando scheduler...");
     startScheduler();
     startNominaScheduler();
+    startV8DisponibilidadScheduler();
     schedulerStarted = true;
     console.log("[INIT] ✅ Scheduler iniciado");
 
