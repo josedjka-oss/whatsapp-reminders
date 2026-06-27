@@ -219,7 +219,7 @@ export const filterEventsAtMinute = (
   return eventos.filter((e) => e.fechaHora === target);
 };
 
-/** Omite eventos cuya hora ya pasó (solo aplica si fecha es hoy en Bogotá). */
+/** Solo eventos futuros (preview). */
 export const filterEventsNotBeforeNow = (
   eventos: V8DisponibilidadEvento[],
   fecha: string,
@@ -230,4 +230,20 @@ export const filterEventsNotBeforeNow = (
   if (fecha > today) return eventos;
   const cutoff = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd'T'HH:mm:00");
   return eventos.filter((e) => e.fechaHora >= cutoff);
+};
+
+/**
+ * Eventos que ya debieron dispararse hoy (hora ≤ ahora).
+ * Recupera señales perdidas si Render/cron no corrió en el minuto exacto.
+ */
+export const filterEventsDueUntilNow = (
+  eventos: V8DisponibilidadEvento[],
+  fecha: string,
+  now: Date = new Date()
+): V8DisponibilidadEvento[] => {
+  const today = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd");
+  if (fecha < today) return [];
+  if (fecha > today) return eventos;
+  const cutoff = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd'T'HH:mm:00");
+  return eventos.filter((e) => e.fechaHora <= cutoff);
 };

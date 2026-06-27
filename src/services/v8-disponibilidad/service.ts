@@ -3,7 +3,7 @@ import { prisma } from "../../db";
 import { APP_TIMEZONE, isV8DisponibilidadConfigured } from "./constants";
 import {
   buildEventsForDay,
-  filterEventsAtMinute,
+  filterEventsDueUntilNow,
   filterEventsNotBeforeNow,
 } from "./event-builder";
 import { loadPlanillaForDate } from "./firestore-planilla";
@@ -72,18 +72,18 @@ const logSendResult = async (
 
 export const syncDisponibilidadDia = async (
   fecha: string,
-  options: { omitirPasados?: boolean } = {}
+  options: { incluirFuturos?: boolean } = {}
 ): Promise<{
   ok: boolean;
   fecha: string;
   eventosGenerados: number;
   eventosEnviados: number;
-  eventosOmitidosPasados?: number;
+  eventosOmitidosFuturos?: number;
   eventos?: V8DisponibilidadEvento[];
   v8?: Record<string, unknown>;
   error?: string;
 }> => {
-  const omitirPasados = options.omitirPasados !== false;
+  const incluirFuturos = options.incluirFuturos === true;
   if (!isV8DisponibilidadConfigured()) {
     return {
       ok: false,
@@ -107,11 +107,13 @@ export const syncDisponibilidadDia = async (
 
   const now = new Date();
   const allBuilt = buildEventsForDay(state, fecha);
-  const afterPast = omitirPasados
-    ? filterEventsNotBeforeNow(allBuilt, fecha, now)
-    : allBuilt;
-  const eventosOmitidosPasados = allBuilt.length - afterPast.length;
-  const eventos = await filterAlreadySent(fecha, afterPast);
+  const today = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd");
+  const pool = incluirFuturos || fecha !== today
+    ? allBuilt
+    : filterEventsDueUntilNow(allBuilt, fecha, now);
+  const eventosOmitidosFuturos =
+    incluirFuturos || fecha !== today ? 0 : allBuilt.length - pool.length;
+  const eventos = await filterAlreadySent(fecha, pool);
 
   if (!eventos.length) {
     return {
@@ -119,13 +121,13 @@ export const syncDisponibilidadDia = async (
       fecha,
       eventosGenerados: 0,
       eventosEnviados: 0,
-      eventosOmitidosPasados,
+      eventosOmitidosFuturos,
       eventos: [],
       v8: {
         skipped: true,
         reason:
-          eventosOmitidosPasados > 0
-            ? "Sin eventos pendientes (los pasados no se reenvían)"
+          eventosOmitidosFuturos > 0
+            ? "Sin eventos pendientes hasta ahora (futuros no se envían)"
             : "Sin eventos pendientes",
       },
     };
@@ -148,7 +150,7 @@ export const syncDisponibilidadDia = async (
     fecha,
     eventosGenerados: eventos.length,
     eventosEnviados: ok ? eventos.length : 0,
-    eventosOmitidosPasados,
+    eventosOmitidosFuturos,
     eventos,
     v8: response as unknown as Record<string, unknown>,
     error: ok ? undefined : response.error,
@@ -168,13 +170,13 @@ export const processDisponibilidadMinute = async (
   if (!state) return;
 
   const allEvents = buildEventsForDay(state, fecha);
-  const dueNow = filterEventsAtMinute(allEvents, fecha, hour, minute);
-  const pending = await filterAlreadySent(fecha, dueNow);
+  const dueUntilNow = filterEventsDueUntilNow(allEvents, fecha, now);
+  const pending = await filterAlreadySent(fecha, dueUntilNow);
 
   if (!pending.length) return;
 
   console.log(
-    `[V8-DISP] ${fecha} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} — ${pending.length} evento(s)`
+    `[V8-DISP] ${fecha} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} — ${pending.length} evento(s) pendiente(s)`
   );
 
   const payload = buildPayload(fecha, pending);
@@ -200,7 +202,7 @@ export const processDisponibilidadMinute = async (
 
 export const previewDisponibilidadDia = async (
   fecha: string,
-  options: { soloFuturos?: boolean } = {}
+  options: { soloFuturos?: boolean; soloPendientes?: boolean } = {}
 ): Promise<{
   fecha: string;
   eventos: V8DisponibilidadEvento[];
@@ -213,11 +215,23 @@ export const previewDisponibilidadDia = async (
   }
 
   const all = buildEventsForDay(state, fecha);
+  const now = new Date();
+  const today = formatInTimeZone(now, APP_TIMEZONE, "yyyy-MM-dd");
+
+  if (options.soloPendientes) {
+    const due = fecha === today ? filterEventsDueUntilNow(all, fecha, now) : all;
+    const pending = await filterAlreadySent(fecha, due);
+    return {
+      fecha,
+      eventos: pending,
+      eventosOmitidosPasados: all.length - pending.length,
+    };
+  }
+
   const soloFuturos = options.soloFuturos !== false;
   if (!soloFuturos) {
     return { fecha, eventos: all, eventosOmitidosPasados: 0 };
   }
-  const now = new Date();
   const futuros = filterEventsNotBeforeNow(all, fecha, now);
   return {
     fecha,

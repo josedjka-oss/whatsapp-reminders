@@ -41,9 +41,13 @@ export async function GET(request: NextRequest) {
     const fecha =
       parseFecha(request.nextUrl.searchParams.get("fecha") || "") ||
       new Date().toISOString().slice(0, 10);
+    const soloPendientes = request.nextUrl.searchParams.get("soloPendientes") === "1";
+
+    const qs = new URLSearchParams({ fecha });
+    if (soloPendientes) qs.set("soloPendientes", "1");
 
     const response = await fetch(
-      `${cfg.backendUrl}/api/v8/planilla-dia?fecha=${encodeURIComponent(fecha)}`,
+      `${cfg.backendUrl}/api/v8/planilla-dia?${qs.toString()}`,
       {
         method: "GET",
         headers: { Authorization: `Bearer ${cfg.secret}` },

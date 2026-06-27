@@ -1342,7 +1342,7 @@
   const callRenderV8PlanillaDia = async (fecha, mensajeroNum) => {
     setStatus('Consultando eventos del día en Render…', '');
     try {
-      const url = `${V8_RENDER_PROXY}?fecha=${encodeURIComponent(fecha)}`;
+      const url = `${V8_RENDER_PROXY}?fecha=${encodeURIComponent(fecha)}&soloPendientes=1`;
       const res = await fetch(url, { method: 'GET' });
       const data = await res.json();
       if (!res.ok || !data.ok) {

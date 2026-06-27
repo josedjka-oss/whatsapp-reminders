@@ -64,13 +64,13 @@ router.post("/sync-dia", requireV8Auth, async (req, res) => {
   const fecha =
     parseFecha(String(req.query.fecha || req.body?.fecha || "")) ||
     new Date().toISOString().slice(0, 10);
-  const omitirPasados = parseBoolQuery(
-    String(req.query.omitirPasados ?? req.body?.omitirPasados ?? ""),
-    true
+  const incluirFuturos = parseBoolQuery(
+    String(req.query.incluirFuturos ?? req.body?.incluirFuturos ?? ""),
+    false
   );
 
   clearPlanillaCache();
-  const result = await syncDisponibilidadDia(fecha, { omitirPasados });
+  const result = await syncDisponibilidadDia(fecha, { incluirFuturos });
   const status = result.ok ? 200 : result.error?.includes("API_KEY") ? 503 : 502;
   return res.status(status).json(result);
 });
@@ -81,8 +81,9 @@ router.get("/planilla-dia", requireV8Auth, async (req, res) => {
     parseFecha(String(req.query.fecha || "")) ||
     new Date().toISOString().slice(0, 10);
   const soloFuturos = parseBoolQuery(String(req.query.soloFuturos ?? ""), true);
+  const soloPendientes = parseBoolQuery(String(req.query.soloPendientes ?? ""), false);
 
-  const result = await previewDisponibilidadDia(fecha, { soloFuturos });
+  const result = await previewDisponibilidadDia(fecha, { soloFuturos, soloPendientes });
   return res.json({ ok: !result.error, ...result });
 });
 

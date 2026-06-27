@@ -1060,9 +1060,10 @@
 
     <h3>Envío</h3>
     <ul>
-      <li><strong>Planilla día</strong> — vista previa por mensajero (solo eventos pendientes hoy).</li>
-      <li><strong>Enviar programación del día</strong> — manda entrada, almuerzo y salida de los 3 mensajeros.</li>
-      <li>Los eventos que <strong>ya pasaron hoy</strong> no se reenvían.</li>
+      <li><strong>Planilla día</strong> — vista previa por mensajero (pendientes que aún no llegaron a V8).</li>
+      <li><strong>Enviar programación del día</strong> — envía entrada, almuerzo y salida pendientes hasta la hora actual.</li>
+      <li>Lo <strong>ya enviado con éxito</strong> no se reenvía; lo <strong>perdido</strong> (Render dormido) sí se recupera.</li>
+      <li>Los horarios futuros del mismo día no se envían hasta que llegue su hora (cron cada minuto).</li>
       <li>Los horarios de almuerzo salen de la fila Alm. (Firebase <code>lunchOverrides</code>).</li>
     </ul>
   </div>
