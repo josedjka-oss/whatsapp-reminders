@@ -162,23 +162,44 @@
           purgeStaleLunchOverrides,
           shouldKeepLunchOverride }  = window.ENGINE_LUNCH;
 
-  /** Meses históricos: almuerzo tal cual Firebase (cells.lunch / lunchOverrides), sin motor WhatsApp. */
+  /** Meses históricos: motor Caja Centro (Firebase solo guarda am/pm). */
+  let legacyJjLunchCache = { monthKey: '', map: null };
+
+  const resetLegacyJjLunchCache = (monthKey) => {
+    legacyJjLunchCache = { monthKey: monthKey || '', map: null };
+  };
+
+  const getLegacyJjLunchByDay = (monthKey) => {
+    const build = window.ENGINE_LUNCH_CAJA?.buildJuanJesusLunch;
+    if (!build) return null;
+    if (legacyJjLunchCache.monthKey !== monthKey || !legacyJjLunchCache.map) {
+      const meta = getMonthMeta(monthKey);
+      legacyJjLunchCache = {
+        monthKey,
+        map: build(state, meta, monthKey),
+      };
+    }
+    return legacyJjLunchCache.map;
+  };
+
   const getLunchDisplayForSheet = (empId, d, monthKey, stateRef, meta) => {
     if (d.noLaborable) return CFG.NO_LAB_MARK;
     if (!isLegacyFrozenMonth(monthKey)) {
       return getLunchDisplay(empId, d, monthKey, stateRef, meta);
     }
-    const fromOverride = getLunchOverride(stateRef, empId, d.day);
-    if (fromOverride != null && String(fromOverride).trim() !== '') {
-      return String(fromOverride).trim();
+    const caja = window.ENGINE_LUNCH_CAJA;
+    if (!caja?.getLunchDisplay) return '';
+    const manual = caja.getLunchOverride?.(stateRef, empId, d.day);
+    if (manual != null && String(manual).trim() !== '') {
+      return String(manual).trim();
     }
-    const cell =
-      stateRef.cells?.[empId]?.[d.day]
-      ?? stateRef.cells?.[empId]?.[String(d.day)];
-    if (cell?.lunch != null && String(cell.lunch).trim() !== '') {
-      return normalizeLunchTime(cell.lunch);
-    }
-    return '';
+    return caja.getLunchDisplay(
+      empId,
+      d,
+      monthKey,
+      stateRef,
+      getLegacyJjLunchByDay(monthKey)
+    );
   };
 
   const hydrateLegacyLunchesFromCells = () => {
@@ -552,13 +573,13 @@
       const marcado = ausente || noLab || ausenteCero;
       const oCls    = marcado ? ' celda-dia-marcado-naranja' : '';
       const isAseo   = legacySheet
-        ? getAseoOverrideEmp(d.day) === empId
+        ? isAseoRecepcionDia(aseoMap, empId, d.day)
         : (isAseoRecepcionDia(aseoMap, empId, d.day) || getAseoOverrideEmp(d.day) === empId);
       const isCocina = legacySheet
         ? false
         : (isCocinaRecepcionDia(cocinaMap, empId, d.day) || getCocinaOverrideEmp(d.day) === empId);
       const isBasura = legacySheet
-        ? getBasuraOverrideEmp(d.day) === empId
+        ? isBasuraSacadaDia(basuraMap, empId, d.day)
         : (isBasuraSacadaDia(basuraMap, empId, d.day) || getBasuraOverrideEmp(d.day) === empId);
       const tdFlags  = { isAseo, isCocina, isBasura };
 
@@ -661,12 +682,8 @@
     const meta        = getMonthMeta(monthKey);
     const chunks      = buildWeekChunks(meta);
     const legacySheet = isLegacyFrozenMonth(monthKey);
-    const basuraMap    = legacySheet
-      ? legacyOverridesToTaskMap(state.basuraOverrides)
-      : buildBasuraPorDia(state, meta, monthKey);
-    const aseoMap      = legacySheet
-      ? legacyOverridesToTaskMap(state.aseoOverrides)
-      : buildAseoRecepcionPorDia(state, meta, monthKey, basuraMap);
+    const basuraMap    = buildBasuraPorDia(state, meta, monthKey);
+    const aseoMap      = buildAseoRecepcionPorDia(state, meta, monthKey, basuraMap);
     const cocinaMap    = legacySheet
       ? {}
       : buildCocinaRecepcionPorDia(state, meta, monthKey, basuraMap, aseoMap);
@@ -926,6 +943,7 @@
 
   const applyPayload = async (monthKey, payload, options = {}) => {
     syncMonthPicker(monthKey);
+    resetLegacyJjLunchCache(monthKey);
     const savedCells = payload?.cells ? cloneCells(payload.cells) : null;
     const savedLocks = normalizeLoadedLocks(payload, monthKey);
 
@@ -1659,17 +1677,11 @@
     const monthKey = fechaYmd.slice(0, 7);
     const day = parseInt(fechaYmd.slice(8, 10), 10);
     const meta = getMonthMeta(monthKey);
-    if (isLegacyFrozenMonth(monthKey)) {
-      return {
-        day,
-        aseoMap: legacyOverridesToTaskMap(state.aseoOverrides),
-        cocinaMap: {},
-        basuraMap: legacyOverridesToTaskMap(state.basuraOverrides),
-      };
-    }
     const basuraMap = buildBasuraPorDia(state, meta, monthKey);
     const aseoMap = buildAseoRecepcionPorDia(state, meta, monthKey, basuraMap);
-    const cocinaMap = buildCocinaRecepcionPorDia(state, meta, monthKey, basuraMap, aseoMap);
+    const cocinaMap = isLegacyFrozenMonth(monthKey)
+      ? {}
+      : buildCocinaRecepcionPorDia(state, meta, monthKey, basuraMap, aseoMap);
     return { day, aseoMap, cocinaMap, basuraMap };
   };
 
