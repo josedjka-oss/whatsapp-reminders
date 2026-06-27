@@ -12,7 +12,9 @@ const parseServiceAccountJson = (): Record<string, unknown> | null => {
   if (!raw) return null;
 
   try {
-    const decoded = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
+    let decoded = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
+    // Render / PowerShell a veces añaden BOM UTF-8 al pegar el JSON
+    decoded = decoded.replace(/^\uFEFF/, "").trim();
     return JSON.parse(decoded) as Record<string, unknown>;
   } catch (error) {
     console.error("[V8-DISP] Error parseando FIREBASE_TURNOS_SERVICE_ACCOUNT_JSON:", error);
