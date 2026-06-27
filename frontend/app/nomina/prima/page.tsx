@@ -198,7 +198,7 @@ export default function NominaPrimaPage() {
         <div className="bg-rose-50 border border-rose-100 rounded-lg p-4 text-sm text-rose-950">
           <p className="font-semibold mb-1">Prima de servicios — envío manual</p>
           <p className="mb-2">
-            <strong>Fórmula:</strong> (Salario mensual × Días trabajados) / 360
+            <strong>Fórmula:</strong> ((Salario + auxilio transporte) × Días trabajados) / 360
           </p>
           <p className="text-rose-800">
             Meses de <strong>30 días</strong> · semestre completo = <strong>180 días</strong>.
@@ -336,7 +336,7 @@ export default function NominaPrimaPage() {
                 <thead className="bg-gray-50 text-left">
                   <tr>
                     <th className="p-3 font-semibold">Empleado</th>
-                    <th className="p-3 font-semibold">Salario</th>
+                    <th className="p-3 font-semibold">Salario + transporte</th>
                     <th className="p-3 font-semibold">Días</th>
                     <th className="p-3 font-semibold">Prima</th>
                     <th className="p-3 font-semibold">WhatsApp</th>

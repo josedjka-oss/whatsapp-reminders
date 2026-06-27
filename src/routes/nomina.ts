@@ -269,7 +269,7 @@ router.delete("/employees/:id", async (req, res) => {
 // --- Prima de servicios ---
 router.get("/prima/examples", (_req, res) => {
   return res.json({
-    formula: "(Salario mensual × Días trabajados) / 360",
+    formula: "((Salario + auxilio transporte) × Días trabajados) / 360",
     daysConvention: "Meses de 30 días; semestre completo = 180 días",
     semester1: "1 enero – 30 junio (180 días)",
     semester2: "1 julio – 31 diciembre (180 días)",
@@ -295,7 +295,8 @@ router.get("/prima/preview", async (req, res) => {
     const rows = employees.map((emp) => {
       const hireDate = emp.hireDate ? parseDateOnly(emp.hireDate) : null;
       const calc = computePrimaForEmployee({
-        monthlySalary: Number(emp.baseSalary),
+        baseSalary: Number(emp.baseSalary),
+        transportAllowance: Number(emp.transportAllowance),
         hireDate,
         year,
         semester,
@@ -315,7 +316,7 @@ router.get("/prima/preview", async (req, res) => {
       year,
       semester,
       semesterLabel: rows[0]?.semesterLabel ?? "",
-      formula: "(Salario mensual × Días trabajados) / 360",
+      formula: "((Salario + auxilio transporte) × Días trabajados) / 360",
       totalPrima,
       rows,
     });
@@ -328,6 +329,10 @@ router.get("/prima/preview", async (req, res) => {
 router.get("/prima/calculate", (req, res) => {
   try {
     const monthlySalary = parseMoney(req.query.monthlySalary ?? 0, "monthlySalary");
+    const transportAllowance = parseMoney(
+      req.query.transportAllowance ?? 0,
+      "transportAllowance"
+    );
     const year = Number(req.query.year) || new Date().getFullYear();
     const semester = parsePrimaSemester(req.query.semester);
     const hireRaw = String(req.query.hireDate ?? "").trim();
@@ -338,7 +343,8 @@ router.get("/prima/calculate", (req, res) => {
     }
 
     const result = computePrimaForEmployee({
-      monthlySalary,
+      baseSalary: monthlySalary,
+      transportAllowance,
       hireDate,
       year,
       semester,

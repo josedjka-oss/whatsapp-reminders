@@ -819,7 +819,8 @@ export const computePrimaRowForEmployee = async (
 
   const hireDate = employee.hireDate ? parseDateOnly(employee.hireDate) : null;
   const calc = computePrimaForEmployee({
-    monthlySalary: toMoney(employee.baseSalary),
+    baseSalary: toMoney(employee.baseSalary),
+    transportAllowance: toMoney(employee.transportAllowance),
     hireDate,
     year,
     semester,

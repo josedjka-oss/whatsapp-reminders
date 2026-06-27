@@ -1,6 +1,6 @@
 /**
  * Prima de servicios — Colombia (referencia habitual).
- * Fórmula: (Salario mensual × Días trabajados en el semestre) / 360
+ * Fórmula: ((Salario + auxilio transporte) × Días trabajados en el semestre) / 360
  *
  * Convención: cada mes = 30 días; semestre completo = 180 días (6 × 30).
  * Semestre 1: 1 ene – 30 jun | Semestre 2: 1 jul – 31 dic
@@ -21,6 +21,8 @@ export type PrimaCalculation = {
   year: number;
   semester: PrimaSemester;
   semesterLabel: string;
+  baseSalary: number;
+  transportAllowance: number;
   monthlySalary: number;
   hireDate: string | null;
   effectiveStart: string;
@@ -29,6 +31,12 @@ export type PrimaCalculation = {
   primaAmount: number;
   formula: string;
 };
+
+/** Base mensual para prima = salario + auxilio de transporte. */
+export const primaMonthlyBase = (
+  baseSalary: number,
+  transportAllowance = 0
+): number => Math.max(0, baseSalary) + Math.max(0, transportAllowance);
 
 /** Día dentro del mes comercial (1–30; día 31 → 30). */
 export const toCommercialDay = (day: number): number =>
@@ -199,7 +207,7 @@ export const buildPrimaWhatsAppMessage = (params: {
     `Prima de servicios — ${title}`,
     "",
     `Empleado: ${params.employeeName}`,
-    `Salario mensual: ${formatCopMessage(params.monthlySalary)}`,
+    `Salario mensual (incl. auxilio transporte): ${formatCopMessage(params.monthlySalary)}`,
     `Días liquidados: ${params.daysWorked}`,
     `Valor prima: ${formatCopMessage(params.primaAmount)}`,
     "",
@@ -209,18 +217,29 @@ export const buildPrimaWhatsAppMessage = (params: {
 };
 
 export const computePrimaForEmployee = (params: {
-  monthlySalary: number;
+  baseSalary: number;
+  transportAllowance?: number;
+  /** Atajo: total mensual ya sumado (calculadora). */
+  monthlySalary?: number;
   hireDate: Date | null;
   year: number;
   semester: PrimaSemester;
 }): PrimaCalculation => {
-  const { monthlySalary, hireDate, year, semester } = params;
+  const baseSalary = Math.max(0, params.baseSalary);
+  const transportAllowance = Math.max(0, params.transportAllowance ?? 0);
+  const monthlySalary =
+    params.monthlySalary != null && params.monthlySalary > 0
+      ? params.monthlySalary
+      : primaMonthlyBase(baseSalary, transportAllowance);
+  const { hireDate, year, semester } = params;
   const daysInfo = computePrimaDaysWorked(hireDate, year, semester);
   const primaAmount = computePrimaAmount(monthlySalary, daysInfo.daysWorked);
 
   return {
     year,
     semester,
+    baseSalary,
+    transportAllowance,
     monthlySalary,
     hireDate: hireDate ? formatDateOnly(hireDate) : null,
     ...daysInfo,
@@ -229,18 +248,20 @@ export const computePrimaForEmployee = (params: {
   };
 };
 
-/** Ejemplos documentados para la UI (salario $2.000.000). */
+/** Ejemplos documentados para la UI (total mensual $2.000.000 incl. transporte). */
 export const PRIMA_EXAMPLES = [
   {
     title: "Ingreso 1 de enero (semestre completo)",
-    monthlySalary: 2_000_000,
+    baseSalary: 1_800_000,
+    transportAllowance: 200_000,
     hireDate: "2026-01-01",
     year: 2026,
     semester: 1 as PrimaSemester,
   },
   {
     title: "Ingreso 1 de marzo",
-    monthlySalary: 2_000_000,
+    baseSalary: 1_800_000,
+    transportAllowance: 200_000,
     hireDate: "2026-03-01",
     year: 2026,
     semester: 1 as PrimaSemester,
@@ -248,7 +269,8 @@ export const PRIMA_EXAMPLES = [
 ].map((ex) => ({
   ...ex,
   result: computePrimaForEmployee({
-    monthlySalary: ex.monthlySalary,
+    baseSalary: ex.baseSalary,
+    transportAllowance: ex.transportAllowance,
     hireDate: parseDateOnly(ex.hireDate),
     year: ex.year,
     semester: ex.semester,
