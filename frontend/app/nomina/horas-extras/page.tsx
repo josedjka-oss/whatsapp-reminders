@@ -48,7 +48,15 @@ export default function NominaHorasExtrasPage() {
       fetch(`/api/nomina/overtime?year=${year}&month=${month}`),
     ]);
     if (empRes.ok) setEmployees(await empRes.json());
-    if (otRes.ok) setRows(await otRes.json());
+    if (otRes.ok) {
+      const otRows: OvertimeRow[] = await otRes.json();
+      setRows(otRows);
+      const draft: Record<string, string> = {};
+      for (const row of otRows) {
+        draft[row.employeeId] = String(row.daytimeHours);
+      }
+      setHoursDraft(draft);
+    }
   }, [year, month]);
 
   useEffect(() => {
@@ -56,8 +64,16 @@ export default function NominaHorasExtrasPage() {
   }, [load]);
 
   const handleSaveHours = async (employeeId: string) => {
+    const existing = rows.find((r) => r.employeeId === employeeId);
     const raw = hoursDraft[employeeId];
-    const daytimeHours = Number(raw ?? 0);
+    const daytimeHours =
+      raw !== undefined && raw !== ""
+        ? Number(raw)
+        : Number(existing?.daytimeHours ?? 0);
+    if (!Number.isFinite(daytimeHours) || daytimeHours < 0) {
+      alert("Ingresa horas válidas (0 o más).");
+      return;
+    }
     const res = await fetch("/api/nomina/overtime", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -65,7 +81,7 @@ export default function NominaHorasExtrasPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Error");
+      alert(data.error || "Error al guardar horas extras");
       return;
     }
     void load();
@@ -180,7 +196,7 @@ export default function NominaHorasExtrasPage() {
                   min={0}
                   className="border rounded px-3 py-2 w-32"
                   placeholder="Horas"
-                  defaultValue={existing?.daytimeHours ?? ""}
+                  value={hoursDraft[emp.id] ?? ""}
                   onChange={(e) =>
                     setHoursDraft((p) => ({ ...p, [emp.id]: e.target.value }))
                   }

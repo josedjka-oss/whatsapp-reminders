@@ -72,6 +72,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   return proxyNomina(request, path, "PATCH");
 }
 
+export async function PUT(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return proxyNomina(request, path, "PUT");
+}
+
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   return proxyNomina(request, path, "DELETE");
