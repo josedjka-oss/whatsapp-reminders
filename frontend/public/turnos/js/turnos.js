@@ -1301,6 +1301,31 @@
       .map(formatV8EventoLinea)
       .join(' · ');
 
+  const setV8Preview = (text) => {
+    const out = el('v8PreviewOut');
+    if (out) out.textContent = String(text ?? '');
+  };
+
+  const formatV8PreviewBlock = (fecha, eventos, mensajeroNum) => {
+    const m = mensajeroNum != null ? Number(mensajeroNum) : null;
+    const pool = m
+      ? (eventos || []).filter((ev) => Number(ev.mensajero) === m)
+      : (eventos || []);
+    const titulo = m ? `M${m} — ${fecha}` : `3 mensajeros — ${fecha}`;
+    if (!pool.length) {
+      return `${titulo}\n(sin eventos en la planilla para este día)`;
+    }
+    const lines = pool
+      .slice()
+      .sort((a, b) => String(a.fechaHora).localeCompare(String(b.fechaHora)))
+      .map((ev) => {
+        const hora = String(ev.fechaHora || '').slice(11, 16) || '??:??';
+        const estado = ev.disponible ? 'DISPONIBLE' : 'NO DISPONIBLE';
+        return `  M${ev.mensajero}  ${hora}  →  ${estado}`;
+      });
+    return `${titulo}\n${lines.join('\n')}`;
+  };
+
   const fechaHoyInput = () => {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -1339,23 +1364,31 @@
     }
   };
 
-  const callRenderV8PlanillaDia = async (fecha, mensajeroNum) => {
-    setStatus('Consultando eventos del día en Render…', '');
+  const callRenderV8PlanillaDia = async (fecha, mensajeroNum, options = {}) => {
+    const verTodo = options.verTodo !== false;
+    setStatus('Consultando programación V8 en Render…', '');
     try {
-      const url = `${V8_RENDER_PROXY}?fecha=${encodeURIComponent(fecha)}&soloPendientes=1`;
-      const res = await fetch(url, { method: 'GET' });
+      const qs = new URLSearchParams({ fecha: String(fecha) });
+      if (verTodo) qs.set('verTodo', '1');
+      else qs.set('soloPendientes', '1');
+      const res = await fetch(`${V8_RENDER_PROXY}?${qs.toString()}`, { method: 'GET' });
       const data = await res.json();
-      if (!res.ok || !data.ok) {
+      if (!res.ok || data.ok === false) {
         setStatus(data.error || `Error Render (${res.status})`, 'err');
+        setV8Preview(data.error || 'Error al consultar V8.');
         return data;
       }
-      const m = Number(mensajeroNum);
-      const eventos = (data.eventos || []).filter((ev) => Number(ev.mensajero) === m);
+      const m = mensajeroNum != null && mensajeroNum !== '' ? Number(mensajeroNum) : null;
+      const eventos = m
+        ? (data.eventos || []).filter((ev) => Number(ev.mensajero) === m)
+        : (data.eventos || []);
+      const previewText = formatV8PreviewBlock(fecha, data.eventos || [], m);
+      setV8Preview(previewText);
       const lista = resumenEventosV8(eventos);
       setStatus(
         lista
-          ? `Preview M${m} — ${lista}`
-          : `Preview M${m} — sin eventos pendientes para ${fecha}`,
+          ? `Planilla V8 — ${lista}`
+          : `Planilla V8 — sin eventos${m ? ` para M${m}` : ''} (${fecha})`,
         eventos.length ? 'ok' : 'warn'
       );
       console.info('[V8 preview]', { fecha, mensajero: m, eventos });
@@ -1363,6 +1396,7 @@
     } catch (e) {
       console.error(e);
       setStatus('Error de red al contactar Render.', 'err');
+      setV8Preview('Error de red al contactar Render.');
       return null;
     }
   };
@@ -1411,6 +1445,11 @@
       void callRenderV8SyncDia(fecha);
     });
 
+    el('btnTestPlanillaDia')?.addEventListener('click', () => {
+      const fecha = el('testV8Fecha')?.value || fechaHoyInput();
+      void callRenderV8PlanillaDia(fecha, null, { verTodo: true });
+    });
+
     panel.querySelectorAll('[data-test-disp]').forEach((btn) => {
       btn.addEventListener('click', () => {
         void callProbarV8({
@@ -1424,7 +1463,7 @@
     panel.querySelectorAll('[data-test-planilla]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const fecha = el('testV8Fecha')?.value || fechaHoyInput();
-        void callRenderV8PlanillaDia(fecha, btn.getAttribute('data-mensajero'));
+        void callRenderV8PlanillaDia(fecha, btn.getAttribute('data-mensajero'), { verTodo: true });
       });
     });
   };

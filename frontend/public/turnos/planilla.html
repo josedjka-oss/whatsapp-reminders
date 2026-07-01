@@ -852,6 +852,40 @@
       padding: 5px 10px;
       font-size: 11.5px;
     }
+    .test-v8-actions {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #ffe082;
+    }
+    .test-v8-actions .btn-test-plan {
+      font-weight: 700;
+      padding: 7px 12px;
+      font-size: 12px;
+    }
+    .v8-preview {
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #90caf9;
+      border-radius: var(--radius);
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      max-height: 12rem;
+      overflow: auto;
+      color: var(--color-text);
+    }
+    .v8-doc-wrap {
+      margin-top: 10px;
+    }
+    .v8-doc-wrap summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #1565c0;
+      font-size: 11.5px;
+      margin-bottom: 6px;
+    }
     .btn-test-cocina {
       background: #1976d2;
       color: #fff;
@@ -1001,6 +1035,39 @@
 <details class="test-v8-panel" id="panelPruebasV8">
   <summary>Pruebas V8 — disponibilidad mensajeros</summary>
 
+  <div class="test-v8-row test-v8-actions">
+    <label for="testV8Fecha">Fecha</label>
+    <input type="date" id="testV8Fecha" aria-label="Fecha para envío de programación" />
+    <button type="button" class="btn btn-test-plan" id="btnTestPlanillaDia" aria-label="Ver programación V8 del día para los 3 mensajeros">
+      Planilla día (3 mensajeros)
+    </button>
+    <button type="button" class="btn btn-secondary" id="btnTestSyncDia" aria-label="Enviar programación completa del día a V8">
+      Enviar programación del día
+    </button>
+  </div>
+  <div class="v8-preview" id="v8PreviewOut" aria-live="polite">Vista previa V8 vacía — elige fecha y pulsa «Planilla día».</div>
+
+  <div class="test-v8-msj" aria-label="Pruebas mensajero 1 Harold">
+    <span class="test-v8-msj-name">M1 Harold</span>
+    <button type="button" class="btn btn-test-on" data-test-disp data-mensajero="1" data-disponible="true">Disponible</button>
+    <button type="button" class="btn btn-test-off" data-test-disp data-mensajero="1" data-disponible="false">No disponible</button>
+    <button type="button" class="btn btn-test-plan" data-test-planilla data-mensajero="1">Planilla día</button>
+  </div>
+  <div class="test-v8-msj" aria-label="Pruebas mensajero 2 Diego">
+    <span class="test-v8-msj-name">M2 Diego</span>
+    <button type="button" class="btn btn-test-on" data-test-disp data-mensajero="2" data-disponible="true">Disponible</button>
+    <button type="button" class="btn btn-test-off" data-test-disp data-mensajero="2" data-disponible="false">No disponible</button>
+    <button type="button" class="btn btn-test-plan" data-test-planilla data-mensajero="2">Planilla día</button>
+  </div>
+  <div class="test-v8-msj" aria-label="Pruebas mensajero 3 Dilan">
+    <span class="test-v8-msj-name">M3 Dilan</span>
+    <button type="button" class="btn btn-test-on" data-test-disp data-mensajero="3" data-disponible="true">Disponible</button>
+    <button type="button" class="btn btn-test-off" data-test-disp data-mensajero="3" data-disponible="false">No disponible</button>
+    <button type="button" class="btn btn-test-plan" data-test-planilla data-mensajero="3">Planilla día</button>
+  </div>
+
+  <details class="v8-doc-wrap">
+    <summary>Ver ayuda y ejemplos V8</summary>
   <div class="v8-doc" aria-label="Documentación envío almuerzos a V8">
     <h3>V8 solo recibe Disponible / No disponible</h3>
     <p>
@@ -1067,32 +1134,7 @@
       <li>Los horarios de almuerzo salen de la fila Alm. (Firebase <code>lunchOverrides</code>).</li>
     </ul>
   </div>
-
-  <div class="test-v8-row">
-    <label for="testV8Fecha">Fecha</label>
-    <input type="date" id="testV8Fecha" aria-label="Fecha para envío de programación" />
-    <button type="button" class="btn btn-secondary" id="btnTestSyncDia" aria-label="Enviar programación completa del día a V8">
-      Enviar programación del día (3 mensajeros)
-    </button>
-  </div>
-  <div class="test-v8-msj" aria-label="Pruebas mensajero 1 Harold">
-    <span class="test-v8-msj-name">M1 Harold</span>
-    <button type="button" class="btn btn-test-on" data-test-disp data-mensajero="1" data-disponible="true">Disponible</button>
-    <button type="button" class="btn btn-test-off" data-test-disp data-mensajero="1" data-disponible="false">No disponible</button>
-    <button type="button" class="btn btn-test-plan" data-test-planilla data-mensajero="1">Planilla día</button>
-  </div>
-  <div class="test-v8-msj" aria-label="Pruebas mensajero 2 Diego">
-    <span class="test-v8-msj-name">M2 Diego</span>
-    <button type="button" class="btn btn-test-on" data-test-disp data-mensajero="2" data-disponible="true">Disponible</button>
-    <button type="button" class="btn btn-test-off" data-test-disp data-mensajero="2" data-disponible="false">No disponible</button>
-    <button type="button" class="btn btn-test-plan" data-test-planilla data-mensajero="2">Planilla día</button>
-  </div>
-  <div class="test-v8-msj" aria-label="Pruebas mensajero 3 Dilan">
-    <span class="test-v8-msj-name">M3 Dilan</span>
-    <button type="button" class="btn btn-test-on" data-test-disp data-mensajero="3" data-disponible="true">Disponible</button>
-    <button type="button" class="btn btn-test-off" data-test-disp data-mensajero="3" data-disponible="false">No disponible</button>
-    <button type="button" class="btn btn-test-plan" data-test-planilla data-mensajero="3">Planilla día</button>
-  </div>
+  </details>
 </details>
 
 <details class="test-v8-panel" id="panelWhatsApp">
@@ -1210,7 +1252,7 @@
 
 <!-- Orquestador principal -->
 <script src="js/turnos-auth.js?v=20260626a"></script>
-<script src="js/turnos.js?v=20260701a"></script>
+<script src="js/turnos.js?v=20260701b"></script>
 <script defer src="js/app-version-check.js?v=20260520c"></script>
 
 </body>
