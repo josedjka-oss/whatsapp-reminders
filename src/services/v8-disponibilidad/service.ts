@@ -133,7 +133,8 @@ export const syncDisponibilidadDia = async (
     };
   }
 
-  const payload = buildPayload(fecha, eventos);
+  /** V8 reemplaza programación externa del día entero — siempre enviar todos los eventos del día */
+  const payload = buildPayload(fecha, allBuilt);
   const { ok, response, attempts } = await postDisponibilidadToV8(payload);
 
   await logSendResult(
@@ -176,10 +177,11 @@ export const processDisponibilidadMinute = async (
   if (!pending.length) return;
 
   console.log(
-    `[V8-DISP] ${fecha} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} — ${pending.length} evento(s) pendiente(s)`
+    `[V8-DISP] ${fecha} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} — ${pending.length} evento(s) pendiente(s), enviando día completo (${allEvents.length} total)`
   );
 
-  const payload = buildPayload(fecha, pending);
+  /** V8 reemplaza programación externa del día — payload siempre con M1+M2+M3 */
+  const payload = buildPayload(fecha, allEvents);
   const { ok, response, attempts } = await postDisponibilidadToV8(payload);
 
   await logSendResult(
