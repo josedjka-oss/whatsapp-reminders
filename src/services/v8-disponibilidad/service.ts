@@ -3,6 +3,7 @@ import { prisma } from "../../db";
 import { APP_TIMEZONE, isV8DisponibilidadConfigured } from "./constants";
 import {
   buildEventsForDay,
+  filterEventsAtMinute,
   filterEventsDueUntilNow,
   filterEventsNotBeforeNow,
 } from "./event-builder";
@@ -173,11 +174,16 @@ export const processDisponibilidadMinute = async (
   const allEvents = buildEventsForDay(state, fecha);
   const dueUntilNow = filterEventsDueUntilNow(allEvents, fecha, now);
   const pending = await filterAlreadySent(fecha, dueUntilNow);
+  /** V8 programa futuros y aplica al recibir POST en/ después de la hora — re-post en el minuto exacto */
+  const atMinute = filterEventsAtMinute(allEvents, fecha, hour, minute);
 
-  if (!pending.length) return;
+  if (!pending.length && !atMinute.length) return;
+
+  const toLog = pending.length ? pending : atMinute;
 
   console.log(
-    `[V8-DISP] ${fecha} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} — ${pending.length} evento(s) pendiente(s), enviando día completo (${allEvents.length} total)`
+    `[V8-DISP] ${fecha} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} — ` +
+      `${pending.length} pendiente(s), ${atMinute.length} en este minuto — enviando día completo (${allEvents.length} total)`
   );
 
   /** V8 reemplaza programación externa del día — payload siempre con M1+M2+M3 */
@@ -186,7 +192,7 @@ export const processDisponibilidadMinute = async (
 
   await logSendResult(
     fecha,
-    pending,
+    toLog,
     payload,
     ok,
     response as unknown as Record<string, unknown>,
@@ -195,7 +201,7 @@ export const processDisponibilidadMinute = async (
 
   if (ok) {
     console.log(
-      `[V8-DISP] OK — guardados ${response.eventosGuardados ?? pending.length} evento(s)`
+      `[V8-DISP] OK — guardados ${response.eventosGuardados ?? toLog.length} evento(s)`
     );
   } else {
     console.error(`[V8-DISP] Falló envío:`, response.error || response);
