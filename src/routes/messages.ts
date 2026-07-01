@@ -1,6 +1,11 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../db";
-import { fromZonedTime } from "date-fns-tz";
+import {
+  detectIntegrationTaskKind,
+  INTEGRATION_TASK_LABELS,
+  INTEGRATION_TASK_ORDER,
+  type IntegrationTaskKind,
+} from "../utils/integration-task-message";
 
 const router = Router();
 
@@ -229,6 +234,8 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
           });
         }
 
+        const taskKind = detectIntegrationTaskKind(sentMessage.body);
+
         const result = {
           id: sentMessage.id,
           to: sentMessage.to,
@@ -238,6 +245,8 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
           twilioSid: sentMessage.twilioSid,
           hasResponse: !!response, // true si hay respuesta, false si no
           responseAt: response?.createdAt || null, // Fecha de la respuesta (si existe)
+          taskKind,
+          taskLabel: taskKind ? INTEGRATION_TASK_LABELS[taskKind] : null,
         };
 
         // Log para debugging
@@ -249,10 +258,25 @@ router.get("/sent-by-date", async (req: Request, res: Response) => {
       })
     );
 
+    const taskMessages = INTEGRATION_TASK_ORDER.reduce(
+      (acc, kind) => {
+        acc[kind] = messagesWithResponseStatus.filter((m) => m.taskKind === kind);
+        return acc;
+      },
+      {} as Record<IntegrationTaskKind, typeof messagesWithResponseStatus>
+    );
+
+    const otherMessages = messagesWithResponseStatus.filter((m) => !m.taskKind);
+
     return res.json({
       date: date,
       count: messagesWithResponseStatus.length,
+      taskCount: messagesWithResponseStatus.filter((m) => m.taskKind).length,
+      taskMessages,
+      taskLabels: INTEGRATION_TASK_LABELS,
+      otherCount: otherMessages.length,
       messages: messagesWithResponseStatus,
+      otherMessages,
     });
   } catch (error: any) {
     console.error("Error obteniendo mensajes por fecha:", error);
