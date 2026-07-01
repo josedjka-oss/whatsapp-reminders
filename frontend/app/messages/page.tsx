@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { NavigationHeader } from "@/components/NavigationHeader";
 import { format } from "date-fns";
 import { es } from "date-fns/locale/es";
-
-type IntegrationTaskKind =
-  | "ASEO_RECEPCION"
-  | "COCINA_RECEPCION"
-  | "SACAR_BASURA";
+import {
+  type IntegrationTaskKind,
+  INTEGRATION_TASK_ORDER,
+  partitionMessagesByTask,
+} from "@/lib/integration-task-message";
 
 interface MessageWithResponse {
   id: string;
@@ -25,12 +25,6 @@ interface MessageWithResponse {
 
 type TaskMessagesMap = Record<IntegrationTaskKind, MessageWithResponse[]>;
 
-const TASK_ORDER: IntegrationTaskKind[] = [
-  "ASEO_RECEPCION",
-  "COCINA_RECEPCION",
-  "SACAR_BASURA",
-];
-
 const TASK_UI: Record<
   IntegrationTaskKind,
   { emoji: string; title: string; schedule: string }
@@ -38,17 +32,17 @@ const TASK_UI: Record<
   ASEO_RECEPCION: {
     emoji: "🧹",
     title: "Aseo Recepción",
-    schedule: "Lun / Mié / Vie · 9:00 a.m.",
+    schedule: "Lun – Sáb · 9:00 a.m. (sáb 9:30) · no festivos",
   },
   COCINA_RECEPCION: {
     emoji: "🍳",
     title: "Aseo Cocina-Pasillo",
-    schedule: "Lun / Mié / Vie · 9:00 a.m.",
+    schedule: "Lun – Sáb · 9:00 a.m. (sáb 9:30) · no festivos",
   },
   SACAR_BASURA: {
     emoji: "🗑️",
     title: "Sacar Basura",
-    schedule: "Lun / Mié / Vie · 6:00 p.m.",
+    schedule: "Lun / Mié / Vie · 6:00 p.m. · no festivos",
   },
 };
 
@@ -81,38 +75,17 @@ export default function MessagesPage() {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
       const data = await response.json();
+      const allMessages = (data.messages ?? []) as MessageWithResponse[];
 
-      const fromApi = data.taskMessages as TaskMessagesMap | undefined;
-      if (fromApi) {
-        setTaskMessages({
-          ASEO_RECEPCION: fromApi.ASEO_RECEPCION ?? [],
-          COCINA_RECEPCION: fromApi.COCINA_RECEPCION ?? [],
-          SACAR_BASURA: fromApi.SACAR_BASURA ?? [],
-        });
-      } else {
-        const fallback = emptyTaskMap();
-        for (const msg of (data.messages ?? []) as MessageWithResponse[]) {
-          if (msg.taskKind && fallback[msg.taskKind]) {
-            fallback[msg.taskKind].push(msg);
-          }
-        }
-        setTaskMessages(fallback);
-      }
+      const partitioned = partitionMessagesByTask(allMessages);
 
-      setOtherMessages(
-        (data.otherMessages as MessageWithResponse[] | undefined) ??
-          ((data.messages ?? []) as MessageWithResponse[]).filter(
-            (m) => !m.taskKind
-          )
-      );
-      setTaskCount(
-        typeof data.taskCount === "number"
-          ? data.taskCount
-          : TASK_ORDER.reduce(
-              (n, k) => n + (fromApi?.[k]?.length ?? 0),
-              0
-            )
-      );
+      setTaskMessages({
+        ASEO_RECEPCION: partitioned.taskMessages.ASEO_RECEPCION,
+        COCINA_RECEPCION: partitioned.taskMessages.COCINA_RECEPCION,
+        SACAR_BASURA: partitioned.taskMessages.SACAR_BASURA,
+      });
+      setOtherMessages(partitioned.otherMessages);
+      setTaskCount(partitioned.taskCount);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Error al cargar mensajes";
@@ -282,7 +255,7 @@ export default function MessagesPage() {
                     Tareas del día
                   </h2>
                   <div className="space-y-4">
-                    {TASK_ORDER.map((kind) => {
+                    {INTEGRATION_TASK_ORDER.map((kind) => {
                       const meta = TASK_UI[kind];
                       const items = taskMessages[kind] ?? [];
 
@@ -335,7 +308,7 @@ export default function MessagesPage() {
                     Tareas Aseo / Cocina / Basura ({taskCount})
                   </h2>
                   <div className="space-y-4">
-                    {TASK_ORDER.flatMap((kind) =>
+                    {INTEGRATION_TASK_ORDER.flatMap((kind) =>
                       (taskMessages[kind] ?? []).map((message) =>
                         renderMessageRow(message)
                       )

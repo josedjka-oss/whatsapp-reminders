@@ -15,30 +15,32 @@ export const INTEGRATION_TASK_ORDER: IntegrationTaskKind[] = [
   "SACAR_BASURA",
 ];
 
+const normalizeBody = (body: string): string =>
+  body
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
 /** Detecta mensajes generados por POST /api/integration/firebase/whatsapp */
 export const detectIntegrationTaskKind = (
   body: string
 ): IntegrationTaskKind | null => {
-  const normalized = body.trim();
+  const n = normalizeBody(body);
 
-  if (
-    normalized.startsWith(`${INTEGRATION_TASK_LABELS.ASEO_RECEPCION} —`) ||
-    normalized.startsWith(`${INTEGRATION_TASK_LABELS.ASEO_RECEPCION} -`)
-  ) {
+  if (/^aseo recepcion\s*[-–—]/.test(n) || n.startsWith("aseo recepcion")) {
     return "ASEO_RECEPCION";
   }
 
   if (
-    normalized.startsWith(`${INTEGRATION_TASK_LABELS.COCINA_RECEPCION} —`) ||
-    normalized.startsWith(`${INTEGRATION_TASK_LABELS.COCINA_RECEPCION} -`)
+    /^aseo cocina[- ]pasillo\s*[-–—]/.test(n) ||
+    n.startsWith("aseo cocina-pasillo") ||
+    n.startsWith("aseo cocina pasillo")
   ) {
     return "COCINA_RECEPCION";
   }
 
-  if (
-    normalized.startsWith(`${INTEGRATION_TASK_LABELS.SACAR_BASURA} —`) ||
-    normalized.startsWith(`${INTEGRATION_TASK_LABELS.SACAR_BASURA} -`)
-  ) {
+  if (/^sacar basura\s*[-–—]/.test(n) || n.startsWith("sacar basura")) {
     return "SACAR_BASURA";
   }
 

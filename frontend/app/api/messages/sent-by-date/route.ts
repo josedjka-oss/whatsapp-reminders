@@ -74,9 +74,14 @@ export async function GET(request: NextRequest) {
     console.log("[MESSAGES PROXY] Datos recibidos del backend:", {
       date: data.date,
       count: data.count,
+      taskCount: data.taskCount,
       messagesCount: data.messages?.length || 0,
     });
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error: any) {
     console.error("[MESSAGES PROXY] Error:", error);
     return NextResponse.json(
