@@ -17,9 +17,11 @@ import aiRouter from "./routes/ai";
 import integrationFirebaseRouter from "./routes/integration-firebase";
 import nominaRouter from "./routes/nomina";
 import v8DisponibilidadRouter from "./routes/v8-disponibilidad";
+import turnosTareasRouter from "./routes/turnos-tareas";
 import { startScheduler } from "./services/scheduler";
 import { startNominaScheduler } from "./services/nomina-scheduler";
 import { startV8DisponibilidadScheduler } from "./services/v8-disponibilidad-scheduler";
+import { startTurnosTareasScheduler } from "./services/turnos-tareas-scheduler";
 import next from "next";
 
 // Cargar variables de entorno
@@ -94,6 +96,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/integration", integrationFirebaseRouter);
 app.use("/api/nomina", nominaRouter);
 app.use("/api/v8", v8DisponibilidadRouter);
+app.use("/api/turnos/tareas", turnosTareasRouter);
 app.use("/webhooks", webhooksRouter);
 
 // Importante: abrir el puerto ANTES de nextApp.prepare(). Si prepare() tarda, el
@@ -150,6 +153,7 @@ async function main() {
       startScheduler();
       startNominaScheduler();
       startV8DisponibilidadScheduler();
+      startTurnosTareasScheduler();
       console.log("[INIT] ✅ Scheduler iniciado");
     } catch (schedError: any) {
       console.error("[INIT] ❌ Error scheduler:", schedError);

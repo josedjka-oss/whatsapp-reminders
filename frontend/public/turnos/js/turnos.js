@@ -1434,6 +1434,9 @@
   const CF_PROBAR_WA = 'https://us-central1-cajacentro-v6.cloudfunctions.net/probarWhatsAppTareas';
   const WHATSAPP_RENDER_API = 'https://whatsapp-reminders-mzex.onrender.com';
   const WHATSAPP_TEST_PROXY = '/api/turnos/whatsapp-test';
+  /** Fuente única: Render lee planilla Firebase y asigna destinatario + hora */
+  const TAREAS_PREVIEW_API = '/api/turnos/tareas/preview';
+  const TAREAS_SEND_API = '/api/turnos/tareas/send';
   const WA_CONTACT_PRUEBA = { id: 'custom_prueba', name: 'PRUEBA' };
 
   const escapeHtml = (s) => String(s ?? '')
@@ -1860,36 +1863,37 @@
     }
   };
 
-  const previewTaskLocal = async (task, fecha) => {
-    if (task !== 'COCINA_RECEPCION') return null;
-    const empId = resolveEmpIdForTaskOnDate(task, fecha);
-    const phone = await resolvePhoneForEmpId(empId);
-    return {
-      empId: empId || null,
-      phone: phone || null,
-      reason: empId ? (phone ? null : 'sin teléfono en empleadosTelefonos') : 'sin cocina asignada ese día',
-    };
-  };
-
   const sendPlanillaWhatsApp = async (task) => {
     const fecha = el('testWaFecha')?.value || fechaHoyInput();
-    if (task === 'COCINA_RECEPCION') {
-      const empId = resolveEmpIdForTaskOnDate(task, fecha);
-      const phone = await resolvePhoneForEmpId(empId);
-      if (!empId) {
-        setStatus('No hay cocina asignada ese día en la planilla.', 'warn');
-        return;
+    setStatus('Enviando WhatsApp (planilla Render)…', '');
+    try {
+      const res = await fetch(TAREAS_SEND_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: fecha, task, force: true }),
+      });
+      const data = await res.json();
+      if (!data.ok && !data.skipped) {
+        setStatus(data.error || data.reason || 'Error WhatsApp.', 'err');
+        setWaPreview(JSON.stringify(data, null, 2));
+        return data;
       }
-      if (!phone) {
-        setStatus(`Sin teléfono para ${empNameById(empId)} (cocina del día).`, 'warn');
-        return;
+      if (data.skipped) {
+        setStatus(data.reason || 'Envío omitido.', 'warn');
+        setWaPreview(JSON.stringify(data, null, 2));
+        return data;
       }
-      await sendWhatsAppViaProxy(phone, task, fecha);
-      return;
+      setStatus(`WhatsApp OK — ${data.empId || task} → ${formatPhoneForInput(data.phone)}`, 'ok');
+      setWaPreview(JSON.stringify(data, null, 2));
+      return data;
+    } catch (e) {
+      console.error(e);
+      setStatus('Error de red al enviar WhatsApp.', 'err');
+      return null;
     }
-    void callProbarWhatsApp({ accion: 'enviar', task, fecha, force: '1' });
   };
 
+  /** @deprecated Firebase CF — ya no se usa para planilla; conservado por compatibilidad */
   const callProbarWhatsApp = async (params) => {
     const url = new URL(CF_PROBAR_WA);
     Object.entries(params).forEach(([k, v]) => {
@@ -1946,40 +1950,39 @@
 
   const previewWhatsAppDia = async () => {
     const fecha = el('testWaFecha')?.value || fechaHoyInput();
-    setStatus('Vista previa…', '');
+    setStatus('Vista previa (Render + planilla Firebase)…', '');
     try {
-      const fetchPreview = async (task) => {
-        const local = await previewTaskLocal(task, fecha);
-        if (local) return local;
-        const url = new URL(CF_PROBAR_WA);
-        url.searchParams.set('accion', 'preview');
-        url.searchParams.set('task', task);
-        url.searchParams.set('fecha', fecha);
-        const res = await fetch(url.toString());
-        return res.json();
+      const res = await fetch(`${TAREAS_PREVIEW_API}?date=${encodeURIComponent(fecha)}`);
+      const data = await res.json();
+      if (!data.ok && !data.tasks) {
+        setStatus(data.error || 'Error en vista previa.', 'err');
+        return;
+      }
+      const byTask = Object.fromEntries((data.tasks || []).map((t) => [t.task, t]));
+      const fmt = (t) => {
+        if (!t) return '—';
+        const who = t.employeeName || t.empId || '—';
+        const ph = formatPhoneForInput(t.phone) || 'sin teléfono';
+        const when = t.scheduledTime ? ` · ${t.scheduledTime}` : '';
+        const extra = t.reason ? `\n  ${t.reason}` : '';
+        return `  ${who} (${t.empId || '—'}) · ${ph}${when}${extra}`;
       };
-      const [aseo, cocina, basura] = await Promise.all([
-        fetchPreview('ASEO_RECEPCION'),
-        fetchPreview('COCINA_RECEPCION'),
-        fetchPreview('SACAR_BASURA'),
-      ]);
       const lines = [
         `Fecha: ${fecha}`,
+        `Fuente: Render (planilla Firebase)`,
+        data.noLaborable ? 'Día no laborable / festivo' : '',
         '',
-        'ASEO_RECEPCION (9:00):',
-        `  ${aseo?.empId || '—'} · ${formatPhoneForInput(aseo?.phone) || 'sin teléfono'}`,
-        aseo?.reason ? `  ${aseo.reason}` : '',
+        'ASEO_RECEPCION:',
+        fmt(byTask.ASEO_RECEPCION),
         '',
-        'COCINA — Aseo Cocina-Pasillo (9:00):',
-        `  ${cocina?.empId || '—'} · ${formatPhoneForInput(cocina?.phone) || 'sin teléfono'}`,
-        cocina?.reason ? `  ${cocina.reason}` : '',
+        'COCINA — Aseo Cocina-Pasillo:',
+        fmt(byTask.COCINA_RECEPCION),
         '',
-        'SACAR_BASURA (18:00):',
-        `  ${basura?.empId || '—'} · ${formatPhoneForInput(basura?.phone) || 'sin teléfono'}`,
-        basura?.reason ? `  ${basura.reason}` : '',
+        'SACAR_BASURA:',
+        fmt(byTask.SACAR_BASURA),
       ].filter((l) => l !== '');
       setWaPreview(lines.join('\n'));
-      setStatus('Vista previa del día.', 'ok');
+      setStatus('Vista previa del día (misma lógica que envío automático).', 'ok');
     } catch (e) {
       console.error(e);
       setStatus('Error en vista previa.', 'err');
