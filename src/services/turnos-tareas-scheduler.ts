@@ -5,12 +5,12 @@ import { APP_TIMEZONE } from "./turnos-tareas/constants";
 export const startTurnosTareasScheduler = (): void => {
   if (!isTurnosTareasEnabled()) {
     console.log(
-      "[TURNOS-TAREAS] Scheduler desactivado (TURNOS_TAREAS_ENABLED=false)"
+      "[TURNOS-TAREAS] Scheduler desactivado — envíos vía señales Turnos (POST /api/integration/firebase/whatsapp). Para reactivar cron interno: TURNOS_TAREAS_ENABLED=true"
     );
     return;
   }
 
-  console.log("[TURNOS-TAREAS] Iniciando scheduler aseo/cocina/basura");
+  console.log("[TURNOS-TAREAS] Cron interno activo (legacy) — planilla Firebase + motor Render");
   console.log(`[TURNOS-TAREAS] Timezone: ${APP_TIMEZONE} — cada minuto`);
 
   cron.schedule(
@@ -21,5 +21,5 @@ export const startTurnosTareasScheduler = (): void => {
     { scheduled: true, timezone: APP_TIMEZONE }
   );
 
-  console.log("[TURNOS-TAREAS] Scheduler activo — fuente: planilla Firebase");
+  console.log("[TURNOS-TAREAS] Scheduler activo — fuente: planilla Firebase (legacy)");
 };

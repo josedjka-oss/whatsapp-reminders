@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import {
+  isTurnosTareasEnabled,
   previewTasksForDate,
   processDueTasks,
   sendTaskForDate,
@@ -92,13 +93,19 @@ router.post("/send", requireTurnosSecret, async (req: Request, res: Response) =>
 
 /**
  * POST /api/turnos/tareas/process-due
- * Cron manual / catch-up del día
+ * Cron manual / catch-up (solo si TURNOS_TAREAS_ENABLED=true)
  */
 router.post(
   "/process-due",
   requireTurnosSecret,
   async (_req: Request, res: Response) => {
     try {
+      if (!isTurnosTareasEnabled()) {
+        return res.status(503).json({
+          error:
+            "Cron interno desactivado. Turnos debe enviar señales a POST /api/integration/firebase/whatsapp (empId + task + date).",
+        });
+      }
       await processDueTasks();
       return res.json({ ok: true, source: "render-planilla" });
     } catch (error: unknown) {

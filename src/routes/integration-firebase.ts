@@ -8,6 +8,8 @@ import { parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale";
 import { prisma } from "../db";
+import { EMPLOYEE_NAMES } from "../services/turnos-tareas/constants";
+import { loadEmployeePhone } from "../services/turnos-tareas/firestore";
 import { sendWhatsAppMessage } from "../services/twilio";
 import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
 
@@ -105,7 +107,44 @@ const buildIntegratedReminderBody = (
 };
 
 /** Versión del contrato de tareas (útil para verificar deploy en Render). */
-export const INTEGRATION_TASKS_VERSION = "2026-06-26-cocina";
+export const INTEGRATION_TASKS_VERSION = "2026-07-03-empId";
+
+const ensureContactForIntegration = async (
+  phone: string,
+  name: string,
+  options: { autoCreate: boolean }
+): Promise<
+  | { ok: true; contactName: string }
+  | { ok: false; reason: string; status: 404 | 500 }
+> => {
+  const normalized = normalizeWhatsAppPhoneNumber(phone);
+  const existing = await prisma.contact.findUnique({ where: { phone: normalized } });
+  if (existing) {
+    return { ok: true, contactName: existing.name };
+  }
+
+  if (!options.autoCreate) {
+    return {
+      ok: false,
+      status: 404,
+      reason:
+        "Este teléfono no existe en nuestra tabla de contactos (/api/contacts). Registra el número antes.",
+    };
+  }
+
+  try {
+    await prisma.contact.create({
+      data: { name, phone: normalized },
+    });
+    return { ok: true, contactName: name };
+  } catch {
+    return {
+      ok: false,
+      status: 500,
+      reason: `Teléfono ${normalized} no está en contactos y no se pudo registrar automáticamente.`,
+    };
+  }
+};
 
 router.get("/firebase/tasks", (_req, res) => {
   return res.json({
@@ -114,19 +153,27 @@ router.get("/firebase/tasks", (_req, res) => {
     labels: Object.fromEntries(
       (Object.keys(TASK_META) as TaskKind[]).map((k) => [k, TASK_META[k].label])
     ),
+    contract: {
+      post: "/api/integration/firebase/whatsapp",
+      required: "task + (phone | empId)",
+      optional: "date (yyyy-MM-DD)",
+      forbidden: ["message", "body", "nombre", "name", "employeeName"],
+    },
   });
 });
 
 /**
- * Solo WHATS arma el texto y envía por Twilio. La otra aplicación sólo ordena teléfono + tipo (+ día opcional).
+ * Solo WHATS arma el texto y envía por Twilio. Turnos u otra app manda señal suelta: tarea + destino.
  *
  * POST /api/integration/firebase/whatsapp
  *
  * Headers: Authorization: Bearer <INTEGRATION_FIREBASE_SECRET> | x-api-key misma valor
  *
  * Body JSON obligatorio:
- *  - phone o to — debe existir en tabla Contact en esta aplicación (mismo formato que /api/contacts)
  *  - task o tipo o kind — ASEO_RECEPCION | COCINA_RECEPCION | SACAR_BASURA (aliases: ASEO, COCINA, BASURA, …)
+ *  - Destino (uno de los dos):
+ *      · empId o employeeId o empleadoId — WHATS busca teléfono en Firebase empleadosTelefonos y registra contacto si falta
+ *      · phone o to — debe existir en tabla Contact (mismo formato que /api/contacts)
  *
  * Opcional:
  *  - date o dia o referenceDate — yyyy-MM-DD (fecha a mostrar; por defecto hoy en APP_TIMEZONE)
@@ -162,11 +209,13 @@ router.post(
       if (forbiddenPresent.length > 0) {
         return res.status(400).json({
           error:
-            `No envíes nombres ni texto del mensaje. Campos no permitidos: ${forbiddenPresent.join(", ")}. Solo usa phone, task (o tipo/kind), y opcional date.`,
+            `No envíes nombres ni texto del mensaje. Campos no permitidos: ${forbiddenPresent.join(", ")}. Usa task + (empId o phone) y opcional date.`,
         });
       }
 
       const rawPhone = req.body.phone ?? req.body.to;
+      const rawEmpId =
+        req.body.empId ?? req.body.employeeId ?? req.body.empleadoId;
       const rawTask =
         req.body.task ?? req.body.tipo ?? req.body.kind;
 
@@ -176,13 +225,6 @@ router.post(
         req.body.referenceDate ??
         req.body.reference_date;
 
-      if (!rawPhone || typeof rawPhone !== "string") {
-        return res.status(400).json({
-          error:
-            'Falta "phone" (o "to") destino WhatsApp registrado aquí.',
-        });
-      }
-
       const taskKind = normalizeTaskKind(rawTask);
       if (!taskKind) {
         return res.status(400).json({
@@ -191,17 +233,47 @@ router.post(
         });
       }
 
-      const to = normalizeWhatsAppPhoneNumber(rawPhone.trim());
+      const hasPhone = typeof rawPhone === "string" && rawPhone.trim().length > 0;
+      const hasEmpId = typeof rawEmpId === "string" && rawEmpId.trim().length > 0;
 
-      const contact = await prisma.contact.findUnique({
-        where: { phone: to },
-      });
-
-      if (!contact) {
-        return res.status(404).json({
+      if (!hasPhone && !hasEmpId) {
+        return res.status(400).json({
           error:
-            "Este teléfono no existe en nuestra tabla de contactos (/api/contacts). Registra el número antes.",
+            'Falta destino: "empId" (recomendado para Turnos) o "phone" registrado en contactos.',
         });
+      }
+
+      let to: string;
+      let resolvedEmpId: string | null = null;
+      let contactName: string;
+
+      if (hasEmpId) {
+        resolvedEmpId = rawEmpId.trim();
+        const phoneFromFirebase = await loadEmployeePhone(resolvedEmpId);
+        if (!phoneFromFirebase) {
+          return res.status(404).json({
+            error: `Sin teléfono en Firebase empleadosTelefonos para empId "${resolvedEmpId}".`,
+            empId: resolvedEmpId,
+          });
+        }
+        to = normalizeWhatsAppPhoneNumber(phoneFromFirebase);
+        const displayName = EMPLOYEE_NAMES[resolvedEmpId] || resolvedEmpId;
+        const contactCheck = await ensureContactForIntegration(to, displayName, {
+          autoCreate: true,
+        });
+        if (!contactCheck.ok) {
+          return res.status(contactCheck.status).json({ error: contactCheck.reason });
+        }
+        contactName = contactCheck.contactName;
+      } else {
+        to = normalizeWhatsAppPhoneNumber(rawPhone.trim());
+        const contactCheck = await ensureContactForIntegration(to, to, {
+          autoCreate: false,
+        });
+        if (!contactCheck.ok) {
+          return res.status(contactCheck.status).json({ error: contactCheck.reason });
+        }
+        contactName = contactCheck.contactName;
       }
 
       let anchorDateUtc: Date;
@@ -231,7 +303,8 @@ router.post(
         twilioSid: sid,
         to,
         task: taskKind,
-        contactFound: contact.name,
+        empId: resolvedEmpId,
+        contactFound: contactName,
         reminderTextBuilt: reminderText,
       });
     } catch (error: any) {

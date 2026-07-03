@@ -37,8 +37,9 @@ const buildReminderBody = (task: TaskKind, fecha: string): string => {
   return `${TASK_LABELS[task]} — ${datePart}, ${timePart}`;
 };
 
+/** Cron interno desactivado por defecto; Turnos envía señales sueltas vía POST /api/integration/firebase/whatsapp */
 export const isTurnosTareasEnabled = (): boolean =>
-  process.env.TURNOS_TAREAS_ENABLED !== "false";
+  process.env.TURNOS_TAREAS_ENABLED === "true";
 
 const ensureContact = async (
   phone: string,
