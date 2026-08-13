@@ -158,9 +158,110 @@ router.get("/firebase/tasks", (_req, res) => {
       required: "task + (phone | empId)",
       optional: "date (yyyy-MM-DD)",
       forbidden: ["message", "body", "nombre", "name", "employeeName"],
+      responseStatus: "/api/integration/firebase/task-response-status",
     },
   });
 });
+
+/**
+ * ¿El mensaje de tarea del día ya tiene respuesta inbound?
+ * GET /api/integration/firebase/task-response-status?date=yyyy-MM-dd&task=COCINA_RECEPCION&empId=...
+ */
+router.get(
+  "/firebase/task-response-status",
+  requireIntegrationSecret,
+  async (req: Request, res: Response) => {
+    try {
+      const date = String(req.query.date || "").trim();
+      const taskKind = normalizeTaskKind(req.query.task);
+      const empId = String(req.query.empId || "").trim() || null;
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "date debe ser yyyy-MM-dd" });
+      }
+      if (!taskKind) {
+        return res.status(400).json({
+          error: "task inválida (ASEO_RECEPCION | COCINA_RECEPCION | SACAR_BASURA)",
+        });
+      }
+
+      const [year, month, day] = date.split("-").map(Number);
+      const startOfDay = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(year, month - 1, day + 1, 4, 59, 59, 999));
+      const label = TASK_META[taskKind].label;
+
+      let phoneFilter: string | null = null;
+      if (empId) {
+        phoneFilter = await loadEmployeePhone(empId);
+        if (phoneFilter) {
+          phoneFilter = normalizeWhatsAppPhoneNumber(phoneFilter);
+        }
+      }
+
+      const outbound = await prisma.message.findMany({
+        where: {
+          direction: "outbound",
+          createdAt: { gte: startOfDay, lte: endOfDay },
+          body: { startsWith: label },
+          ...(phoneFilter ? { to: phoneFilter } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      });
+
+      if (!outbound.length) {
+        return res.json({
+          ok: true,
+          date,
+          task: taskKind,
+          empId,
+          found: false,
+          hasResponse: false,
+          sentAt: null,
+          responseAt: null,
+          messageId: null,
+        });
+      }
+
+      const sent = outbound[0];
+      const phoneDigits = String(sent.to || "").replace(/\D/g, "");
+      const response = await prisma.message.findFirst({
+        where: {
+          direction: "inbound",
+          createdAt: { gte: sent.createdAt },
+          OR: [
+            { from: sent.to },
+            ...(phoneDigits
+              ? [{ from: { contains: phoneDigits.slice(-10) } }]
+              : []),
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      return res.json({
+        ok: true,
+        date,
+        task: taskKind,
+        empId,
+        found: true,
+        hasResponse: Boolean(response),
+        sentAt: sent.createdAt,
+        responseAt: response?.createdAt || null,
+        messageId: sent.id,
+        to: sent.to,
+      });
+    } catch (error: any) {
+      console.error(
+        "[INTEGRATION] task-response-status:",
+        error?.message ?? error
+      );
+      return res.status(500).json({
+        error: error.message || "Error consultando respuesta",
+      });
+    }
+  }
+);
 
 /**
  * Solo WHATS arma el texto y envía por Twilio. Turnos u otra app manda señal suelta: tarea + destino.
