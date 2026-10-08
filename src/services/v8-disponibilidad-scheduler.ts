@@ -8,7 +8,7 @@ import {
 export const startV8DisponibilidadScheduler = (): void => {
   if (!isSchedulerEnabled()) {
     console.log(
-      "[V8-DISP] Scheduler desactivado (falta V8_DISPONIBILIDAD_API_KEY o V8_DISPONIBILIDAD_ENABLED=false)"
+      "[V8-DISP] Scheduler desactivado — disponibilidad V8 vía Turnos (Firebase). Para cron Render: V8_DISPONIBILIDAD_ENABLED=true"
     );
     return;
   }

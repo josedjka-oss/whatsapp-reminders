@@ -22,6 +22,13 @@ export default function NominaHomePage() {
       color: "from-rose-500 to-rose-600",
     },
     {
+      title: "Vacaciones",
+      desc: "Liquidación individual (salario × días / 720) y WhatsApp con recibo",
+      href: "/nomina/vacaciones",
+      emoji: "🏖️",
+      color: "from-sky-500 to-sky-600",
+    },
+    {
       title: "Empleados",
       desc: "Salario, bonificación, descuentos fijos y teléfono WhatsApp",
       href: "/nomina/empleados",

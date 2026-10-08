@@ -27,6 +27,14 @@ import {
   serializeNominaSlipForApi,
   uploadValePhoto,
   upsertSlipForEmployee,
+  createVacacionLiquidacion,
+  deleteVacacionLiquidacion,
+  getVacacionByToken,
+  listVacacionLiquidaciones,
+  previewVacacionForEmployee,
+  sendVacacionWhatsApp,
+  buildVacacionWhatsAppMessageForLiquidacion,
+  serializeVacacionLiquidacion,
 } from "../services/nomina-service";
 import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
 import {
@@ -41,6 +49,10 @@ import {
   PRIMA_EXAMPLES,
   type PrimaSemester,
 } from "../utils/nomina-prima-calculations";
+import {
+  VACACION_EXAMPLE_MIGUEL,
+  VACACION_FORMULA_DIVISOR,
+} from "../utils/nomina-vacaciones-calculations";
 
 const router = Router();
 
@@ -104,6 +116,28 @@ router.get("/public/recibo/:token", async (req: Request, res: Response) => {
       netTotal: Number(slip.netTotal),
       breakdown: slip.breakdown,
     });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(500).json({ error: message });
+  }
+});
+
+router.get("/public/vacaciones/:token", async (req: Request, res: Response) => {
+  try {
+    const row = await getVacacionByToken(req.params.token);
+    if (!row) {
+      return res.status(404).json({ error: "Liquidación no encontrada" });
+    }
+    return res.json(
+      serializeVacacionLiquidacion({
+        ...row,
+        employee: {
+          id: row.employeeId,
+          name: row.employee.name,
+          phone: row.employee.phone ?? null,
+        },
+      })
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     return res.status(500).json({ error: message });
@@ -403,6 +437,140 @@ router.post("/prima/send-whatsapp-all", async (req, res) => {
     const semester = parsePrimaSemester(req.body?.semester);
     const result = await sendAllPrimaWhatsApp(year, semester);
     return res.json({ ok: true, ...result });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// --- Liquidación vacaciones (individual por empleado) ---
+router.get("/vacaciones/info", (_req, res) => {
+  return res.json({
+    formula: `(Salario ordinario × Días trabajados) / ${VACACION_FORMULA_DIVISOR}`,
+    daysConvention: "Por defecto 360 días (año comercial → 15 días de salario)",
+    defaultDaysWorked: 360,
+    baseSalary: "Solo salario fijo ordinario — sin auxilio de transporte ni horas extras (CST art. 192)",
+    example: VACACION_EXAMPLE_MIGUEL,
+  });
+});
+
+router.get("/vacaciones/preview", async (req, res) => {
+  try {
+    const employeeId = String(req.query.employeeId ?? "").trim();
+    const periodStart = String(req.query.periodStart ?? "").trim() || null;
+    const periodEnd = String(req.query.periodEnd ?? "").trim() || null;
+    const daysWorked = String(req.query.daysWorked ?? "360");
+    const vacationStartDate = String(req.query.vacationStartDate ?? "").trim() || null;
+
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId es requerido" });
+    }
+
+    const { employee, calc } = await previewVacacionForEmployee({
+      employeeId,
+      periodStart,
+      periodEnd,
+      daysWorked,
+      vacationStartDate,
+    });
+
+    return res.json({
+      employeeId: employee.id,
+      employeeName: employee.name,
+      phone: employee.phone,
+      transportAllowance: Number(employee.transportAllowance),
+      ...calc,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.get("/vacaciones/liquidaciones", async (req, res) => {
+  try {
+    const employeeId = req.query.employeeId
+      ? String(req.query.employeeId).trim()
+      : undefined;
+    const rows = await listVacacionLiquidaciones(employeeId);
+    return res.json({ count: rows.length, rows });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.post("/vacaciones/liquidaciones", async (req, res) => {
+  try {
+    const employeeId = String(req.body?.employeeId ?? "").trim();
+    const periodStart = req.body?.periodStart
+      ? String(req.body.periodStart).trim()
+      : null;
+    const periodEnd = req.body?.periodEnd ? String(req.body.periodEnd).trim() : null;
+    const daysWorked =
+      req.body?.daysWorked !== undefined && req.body?.daysWorked !== null
+        ? req.body.daysWorked
+        : 360;
+    const vacationStartDate = req.body?.vacationStartDate
+      ? String(req.body.vacationStartDate).trim()
+      : null;
+    const notes = req.body?.notes ? String(req.body.notes) : null;
+
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId es requerido" });
+    }
+
+    const row = await createVacacionLiquidacion({
+      employeeId,
+      periodStart,
+      periodEnd,
+      daysWorked,
+      vacationStartDate,
+      notes,
+    });
+    return res.status(201).json({ ok: true, liquidacion: row });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.get("/vacaciones/liquidaciones/:id/message-preview", async (req, res) => {
+  try {
+    const row = await prisma.nominaVacacionLiquidacion.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { employee: true },
+    });
+    const message = buildVacacionWhatsAppMessageForLiquidacion(row);
+    return res.json({ message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.post("/vacaciones/liquidaciones/:id/send-whatsapp", async (req, res) => {
+  try {
+    const result = await sendVacacionWhatsApp(req.params.id);
+    const row = await prisma.nominaVacacionLiquidacion.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { employee: { select: { id: true, name: true, phone: true } } },
+    });
+    return res.json({
+      ok: true,
+      liquidacion: serializeVacacionLiquidacion(row),
+      ...result,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error";
+    return res.status(400).json({ error: message });
+  }
+});
+
+router.delete("/vacaciones/liquidaciones/:id", async (req, res) => {
+  try {
+    await deleteVacacionLiquidacion(req.params.id);
+    return res.json({ ok: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error";
     return res.status(400).json({ error: message });

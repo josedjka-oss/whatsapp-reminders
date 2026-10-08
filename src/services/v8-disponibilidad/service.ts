@@ -11,11 +11,12 @@ import { loadPlanillaForDate } from "./firestore-planilla";
 import { buildPayload, postDisponibilidadToV8 } from "./v8-client";
 import type { V8DisponibilidadEvento } from "./types";
 
-const isSchedulerEnabled = (): boolean => {
-  const flag = process.env.V8_DISPONIBILIDAD_ENABLED?.trim().toLowerCase();
-  if (flag === "false" || flag === "0") return false;
-  return isV8DisponibilidadConfigured();
-};
+/** Solo activo con V8_DISPONIBILIDAD_ENABLED=true. Por defecto apagado — V8 lo maneja Turnos (Firebase). */
+export const isV8DisponibilidadEnabled = (): boolean =>
+  process.env.V8_DISPONIBILIDAD_ENABLED?.trim().toLowerCase() === "true";
+
+const isSchedulerEnabled = (): boolean =>
+  isV8DisponibilidadEnabled() && isV8DisponibilidadConfigured();
 
 const filterAlreadySent = async (
   fecha: string,
@@ -85,6 +86,16 @@ export const syncDisponibilidadDia = async (
   error?: string;
 }> => {
   const incluirFuturos = options.incluirFuturos === true;
+  if (!isV8DisponibilidadEnabled()) {
+    return {
+      ok: false,
+      fecha,
+      eventosGenerados: 0,
+      eventosEnviados: 0,
+      error:
+        "V8_DISPONIBILIDAD_ENABLED=false — disponibilidad V8 vía Turnos (Firebase), no Render",
+    };
+  }
   if (!isV8DisponibilidadConfigured()) {
     return {
       ok: false,

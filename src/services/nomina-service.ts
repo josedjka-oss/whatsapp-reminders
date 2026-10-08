@@ -28,6 +28,12 @@ import {
   parseDateOnly,
   type PrimaSemester,
 } from "../utils/nomina-prima-calculations";
+import {
+  buildVacacionFormula,
+  buildVacacionWhatsAppMessage,
+  computeVacacionForEmployee,
+  parseVacacionDates,
+} from "../utils/nomina-vacaciones-calculations";
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 
@@ -64,6 +70,9 @@ export const getNominaPublicBaseUrl = (): string => {
 
 export const buildSlipPublicUrl = (accessToken: string): string =>
   `${getNominaPublicBaseUrl()}/nomina/recibo/${accessToken}`;
+
+export const buildVacacionPublicUrl = (accessToken: string): string =>
+  `${getNominaPublicBaseUrl()}/nomina/vacaciones/recibo/${accessToken}`;
 
 /** Día 15 = quincena 1; último día del mes = quincena 2 */
 export const resolvePeriodHalfForToday = (
@@ -1153,4 +1162,210 @@ export const getPeriodSummary = async (
     );
   }
   return getPeriodSummaryById(period.id);
+};
+
+export type CreateVacacionLiquidacionInput = {
+  employeeId: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  daysWorked?: number | string | null;
+  vacationStartDate?: string | null;
+  notes?: string | null;
+};
+
+export const previewVacacionForEmployee = async (
+  input: CreateVacacionLiquidacionInput
+) => {
+  const dates = parseVacacionDates(input);
+  if ("error" in dates) {
+    throw new Error(dates.error);
+  }
+
+  const employee = await prisma.nominaEmployee.findUniqueOrThrow({
+    where: { id: input.employeeId },
+  });
+
+  const calc = computeVacacionForEmployee({
+    baseSalary: toMoney(employee.baseSalary),
+    periodStart: dates.periodStart,
+    periodEnd: dates.periodEnd,
+    daysWorked: dates.daysWorked,
+    vacationStartDate: dates.vacationStartDate,
+  });
+
+  return { employee, calc };
+};
+
+export const createVacacionLiquidacion = async (
+  input: CreateVacacionLiquidacionInput
+) => {
+  const { employee, calc } = await previewVacacionForEmployee(input);
+
+  if (calc.daysWorked <= 0) {
+    throw new Error("El período no tiene días trabajados válidos.");
+  }
+  if (calc.vacationAmount <= 0) {
+    throw new Error("El valor de vacaciones calculado es cero.");
+  }
+
+  const row = await prisma.nominaVacacionLiquidacion.create({
+    data: {
+      employeeId: employee.id,
+      periodStart: datesFromCalc(calc.periodStart),
+      periodEnd: datesFromCalc(calc.periodEnd),
+      vacationStartDate: calc.vacationStartDate
+        ? datesFromCalc(calc.vacationStartDate)
+        : null,
+      baseSalaryUsed: calc.baseSalary,
+      daysWorked: calc.daysWorked,
+      vacationAmount: calc.vacationAmount,
+      equivalentDays: calc.equivalentVacationDays,
+      breakdown: calc as unknown as Prisma.InputJsonValue,
+      notes: input.notes?.trim() || null,
+    },
+    include: { employee: { select: { id: true, name: true, phone: true } } },
+  });
+
+  return serializeVacacionLiquidacion(row);
+};
+
+const datesFromCalc = (ymd: string): Date => {
+  const d = parseDateOnly(ymd);
+  if (!d) throw new Error(`Fecha inválida: ${ymd}`);
+  return d;
+};
+
+export const serializeVacacionLiquidacion = (
+  row: {
+    id: string;
+    accessToken: string;
+    employeeId: string;
+    periodStart: Date;
+    periodEnd: Date;
+    vacationStartDate: Date | null;
+    baseSalaryUsed: Prisma.Decimal;
+    daysWorked: number;
+    vacationAmount: Prisma.Decimal;
+    equivalentDays: Prisma.Decimal;
+    breakdown: unknown;
+    notes: string | null;
+    whatsappSentAt: Date | null;
+    createdAt: Date;
+    employee?: { id: string; name: string; phone: string | null };
+  }
+) => ({
+  id: row.id,
+  accessToken: row.accessToken,
+  employeeId: row.employeeId,
+  employeeName: row.employee?.name,
+  phone: row.employee?.phone ?? null,
+  periodStart: formatDateOnlyRow(row.periodStart),
+  periodEnd: formatDateOnlyRow(row.periodEnd),
+  vacationStartDate: row.vacationStartDate
+    ? formatDateOnlyRow(row.vacationStartDate)
+    : null,
+  baseSalaryUsed: toMoney(row.baseSalaryUsed),
+  daysWorked: row.daysWorked,
+  vacationAmount: toMoney(row.vacationAmount),
+  equivalentDays: Number(row.equivalentDays),
+  breakdown: row.breakdown,
+  notes: row.notes,
+  whatsappSentAt: row.whatsappSentAt,
+  createdAt: row.createdAt,
+  publicUrl: buildVacacionPublicUrl(row.accessToken),
+});
+
+const formatDateOnlyRow = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+export const listVacacionLiquidaciones = async (employeeId?: string) => {
+  const rows = await prisma.nominaVacacionLiquidacion.findMany({
+    where: employeeId ? { employeeId } : undefined,
+    include: { employee: { select: { id: true, name: true, phone: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(serializeVacacionLiquidacion);
+};
+
+export const getVacacionByToken = async (accessToken: string) => {
+  return prisma.nominaVacacionLiquidacion.findUnique({
+    where: { accessToken },
+    include: { employee: { select: { name: true, phone: true } } },
+  });
+};
+
+export const buildVacacionWhatsAppMessageForLiquidacion = (row: {
+  accessToken: string;
+  baseSalaryUsed: Prisma.Decimal | number;
+  daysWorked: number;
+  vacationAmount: Prisma.Decimal | number;
+  equivalentDays: Prisma.Decimal | number;
+  periodStart: Date;
+  periodEnd: Date;
+  vacationStartDate: Date | null;
+  breakdown: unknown;
+  employee: { name: string };
+}): string => {
+  const breakdown = row.breakdown as { formula?: string } | null;
+  const formula =
+    breakdown?.formula ??
+    buildVacacionFormulaFromRow(row);
+
+  return buildVacacionWhatsAppMessage({
+    employeeName: row.employee.name,
+    baseSalary: toMoney(row.baseSalaryUsed),
+    daysWorked: row.daysWorked,
+    vacationAmount: toMoney(row.vacationAmount),
+    equivalentVacationDays: Number(row.equivalentDays),
+    formula,
+    periodStart: formatDateOnlyRow(row.periodStart),
+    periodEnd: formatDateOnlyRow(row.periodEnd),
+    vacationStartDate: row.vacationStartDate
+      ? formatDateOnlyRow(row.vacationStartDate)
+      : null,
+    publicUrl: buildVacacionPublicUrl(row.accessToken),
+  });
+};
+
+const buildVacacionFormulaFromRow = (row: {
+  baseSalaryUsed: Prisma.Decimal | number;
+  daysWorked: number;
+  vacationAmount: Prisma.Decimal | number;
+}): string =>
+  buildVacacionFormula(
+    toMoney(row.baseSalaryUsed),
+    row.daysWorked,
+    toMoney(row.vacationAmount)
+  );
+
+export const sendVacacionWhatsApp = async (liquidacionId: string) => {
+  const row = await prisma.nominaVacacionLiquidacion.findUniqueOrThrow({
+    where: { id: liquidacionId },
+    include: { employee: true },
+  });
+
+  if (!row.employee.phone) {
+    throw new Error(
+      `El empleado ${row.employee.name} no tiene teléfono WhatsApp configurado.`
+    );
+  }
+
+  const reminderText = buildVacacionWhatsAppMessageForLiquidacion(row);
+  const to = normalizeWhatsAppPhoneNumber(row.employee.phone);
+  const sid = await sendWhatsAppMessage({ to, reminderText });
+
+  await prisma.nominaVacacionLiquidacion.update({
+    where: { id: liquidacionId },
+    data: { whatsappSentAt: new Date() },
+  });
+
+  return { sid, to, reminderText };
+};
+
+export const deleteVacacionLiquidacion = async (id: string) => {
+  await prisma.nominaVacacionLiquidacion.delete({ where: { id } });
 };
