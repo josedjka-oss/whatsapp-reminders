@@ -32,6 +32,7 @@ import {
   buildVacacionFormula,
   buildVacacionWhatsAppMessage,
   computeVacacionForEmployee,
+  enrichVacacionBreakdown,
   parseVacacionDates,
 } from "../utils/nomina-vacaciones-calculations";
 
@@ -1207,6 +1208,11 @@ export const createVacacionLiquidacion = async (
   if (calc.vacationAmount <= 0) {
     throw new Error("El valor de vacaciones calculado es cero.");
   }
+  if (!calc.vacationStartDate) {
+    throw new Error(
+      "Indica la fecha de inicio de vacaciones para calcular el último día hábil."
+    );
+  }
 
   const row = await prisma.nominaVacacionLiquidacion.create({
     data: {
@@ -1253,27 +1259,42 @@ export const serializeVacacionLiquidacion = (
     createdAt: Date;
     employee?: { id: string; name: string; phone: string | null };
   }
-) => ({
-  id: row.id,
-  accessToken: row.accessToken,
-  employeeId: row.employeeId,
-  employeeName: row.employee?.name,
-  phone: row.employee?.phone ?? null,
-  periodStart: formatDateOnlyRow(row.periodStart),
-  periodEnd: formatDateOnlyRow(row.periodEnd),
-  vacationStartDate: row.vacationStartDate
-    ? formatDateOnlyRow(row.vacationStartDate)
-    : null,
-  baseSalaryUsed: toMoney(row.baseSalaryUsed),
-  daysWorked: row.daysWorked,
-  vacationAmount: toMoney(row.vacationAmount),
-  equivalentDays: Number(row.equivalentDays),
-  breakdown: row.breakdown,
-  notes: row.notes,
-  whatsappSentAt: row.whatsappSentAt,
-  createdAt: row.createdAt,
-  publicUrl: buildVacacionPublicUrl(row.accessToken),
-});
+) => {
+  const receipt = enrichVacacionBreakdown({
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    vacationStartDate: row.vacationStartDate,
+    equivalentDays: Number(row.equivalentDays),
+    breakdown: row.breakdown,
+  });
+
+  return {
+    id: row.id,
+    accessToken: row.accessToken,
+    employeeId: row.employeeId,
+    employeeName: row.employee?.name,
+    phone: row.employee?.phone ?? null,
+    periodStart: formatDateOnlyRow(row.periodStart),
+    periodEnd: formatDateOnlyRow(row.periodEnd),
+    vacationStartDate: row.vacationStartDate
+      ? formatDateOnlyRow(row.vacationStartDate)
+      : null,
+    baseSalaryUsed: toMoney(row.baseSalaryUsed),
+    daysWorked: row.daysWorked,
+    vacationAmount: toMoney(row.vacationAmount),
+    equivalentDays: Number(row.equivalentDays),
+    breakdown: row.breakdown,
+    periodLabelLong: receipt.periodLabelLong,
+    vacationStartLabelLong: receipt.vacationStartLabelLong,
+    vacationEndDate: receipt.vacationEndDate,
+    vacationEndLabelLong: receipt.vacationEndLabelLong,
+    vacationBusinessDays: receipt.vacationBusinessDays,
+    notes: row.notes,
+    whatsappSentAt: row.whatsappSentAt,
+    createdAt: row.createdAt,
+    publicUrl: buildVacacionPublicUrl(row.accessToken),
+  };
+};
 
 const formatDateOnlyRow = (date: Date): string => {
   const y = date.getFullYear();
@@ -1310,9 +1331,17 @@ export const buildVacacionWhatsAppMessageForLiquidacion = (row: {
   breakdown: unknown;
   employee: { name: string };
 }): string => {
+  const receipt = enrichVacacionBreakdown({
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    vacationStartDate: row.vacationStartDate,
+    equivalentDays: Number(row.equivalentDays),
+    breakdown: row.breakdown,
+  });
   const breakdown = row.breakdown as { formula?: string } | null;
   const formula =
     breakdown?.formula ??
+    receipt.formula ??
     buildVacacionFormulaFromRow(row);
 
   return buildVacacionWhatsAppMessage({
@@ -1322,11 +1351,10 @@ export const buildVacacionWhatsAppMessageForLiquidacion = (row: {
     vacationAmount: toMoney(row.vacationAmount),
     equivalentVacationDays: Number(row.equivalentDays),
     formula,
-    periodStart: formatDateOnlyRow(row.periodStart),
-    periodEnd: formatDateOnlyRow(row.periodEnd),
-    vacationStartDate: row.vacationStartDate
-      ? formatDateOnlyRow(row.vacationStartDate)
-      : null,
+    periodLabelLong: receipt.periodLabelLong,
+    vacationStartLabelLong: receipt.vacationStartLabelLong,
+    vacationEndLabelLong: receipt.vacationEndLabelLong,
+    vacationBusinessDays: receipt.vacationBusinessDays,
     publicUrl: buildVacacionPublicUrl(row.accessToken),
   });
 };

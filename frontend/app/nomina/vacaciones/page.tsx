@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavigationHeader } from "@/components/NavigationHeader";
+import {
+  VacacionReciboContent,
+  type VacacionReciboData,
+} from "@/components/VacacionReciboContent";
 
 type Employee = { id: string; name: string; phone: string | null; baseSalary: number };
 
@@ -13,6 +17,11 @@ type VacacionPreview = {
   periodStart: string;
   periodEnd: string;
   vacationStartDate: string | null;
+  periodLabelLong: string;
+  vacationStartLabelLong: string | null;
+  vacationEndDate: string | null;
+  vacationEndLabelLong: string | null;
+  vacationBusinessDays: number;
   daysWorked: number;
   vacationAmount: number;
   equivalentVacationDays: number;
@@ -27,13 +36,48 @@ type LiquidacionRow = {
   periodStart: string;
   periodEnd: string;
   vacationStartDate: string | null;
+  periodLabelLong?: string;
+  vacationStartLabelLong?: string | null;
+  vacationEndLabelLong?: string | null;
+  vacationBusinessDays?: number;
   baseSalaryUsed: number;
   daysWorked: number;
   vacationAmount: number;
   equivalentDays: number;
   publicUrl: string;
   whatsappSentAt: string | null;
+  breakdown?: { formula?: string };
 };
+
+const rowToRecibo = (row: LiquidacionRow): VacacionReciboData => ({
+  employeeName: row.employeeName,
+  periodLabelLong: row.periodLabelLong,
+  periodStart: row.periodStart,
+  periodEnd: row.periodEnd,
+  vacationStartLabelLong: row.vacationStartLabelLong,
+  vacationEndLabelLong: row.vacationEndLabelLong,
+  vacationBusinessDays: row.vacationBusinessDays,
+  baseSalaryUsed: row.baseSalaryUsed,
+  daysWorked: row.daysWorked,
+  vacationAmount: row.vacationAmount,
+  equivalentDays: row.equivalentDays,
+  breakdown: row.breakdown,
+});
+
+const previewToRecibo = (p: VacacionPreview): VacacionReciboData => ({
+  employeeName: p.employeeName,
+  periodLabelLong: p.periodLabelLong,
+  periodStart: p.periodStart,
+  periodEnd: p.periodEnd,
+  vacationStartLabelLong: p.vacationStartLabelLong,
+  vacationEndLabelLong: p.vacationEndLabelLong,
+  vacationBusinessDays: p.vacationBusinessDays,
+  baseSalary: p.baseSalary,
+  daysWorked: p.daysWorked,
+  vacationAmount: p.vacationAmount,
+  equivalentVacationDays: p.equivalentVacationDays,
+  formula: p.formula,
+});
 
 const formatCop = (n: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -65,12 +109,16 @@ export default function NominaVacacionesPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
-  const [messagePreview, setMessagePreview] = useState<{
-    id: string;
+  const [whatsappPreview, setWhatsappPreview] = useState<{
+    liquidacionId: string;
     employeeName: string;
-    text: string;
+    recibo: VacacionReciboData;
+    messageText: string;
   } | null>(null);
   const [previewSending, setPreviewSending] = useState(false);
+  const [draftReciboPreview, setDraftReciboPreview] = useState<VacacionReciboData | null>(
+    null
+  );
 
   const selectedEmployee = useMemo(
     () => employees.find((e) => e.id === employeeId),
@@ -138,6 +186,10 @@ export default function NominaVacacionesPage() {
   };
 
   const handleSave = async () => {
+    if (!vacationStartDate) {
+      alert("Indica la fecha de inicio de vacaciones.");
+      return;
+    }
     if (!preview) {
       await handlePreview();
       return;
@@ -168,28 +220,37 @@ export default function NominaVacacionesPage() {
     }
   };
 
-  const handleOpenMessagePreview = async (row: LiquidacionRow) => {
+  const handleOpenWhatsAppPreview = async (row: LiquidacionRow) => {
+    if (!row.phone) {
+      alert(`${row.employeeName ?? "Empleado"} no tiene teléfono WhatsApp.`);
+      return;
+    }
     const res = await fetch(
       `/api/nomina/vacaciones/liquidaciones/${row.id}/message-preview`
     );
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Error al generar mensaje");
+      alert(data.error || "Error al generar vista previa");
       return;
     }
-    setMessagePreview({
-      id: row.id,
+    setWhatsappPreview({
+      liquidacionId: row.id,
       employeeName: row.employeeName ?? "",
-      text: data.message,
+      recibo: rowToRecibo(row),
+      messageText: data.message,
     });
   };
 
-  const handleSendWhatsApp = async (id: string, employeeName: string) => {
-    setSendingId(id);
+  const handleSendWhatsAppConfirmed = async () => {
+    if (!whatsappPreview) return;
+    const { liquidacionId, employeeName } = whatsappPreview;
+    setSendingId(liquidacionId);
+    setPreviewSending(true);
     try {
-      const res = await fetch(`/api/nomina/vacaciones/liquidaciones/${id}/send-whatsapp`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/nomina/vacaciones/liquidaciones/${liquidacionId}/send-whatsapp`,
+        { method: "POST" }
+      );
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || "Error al enviar");
@@ -197,7 +258,7 @@ export default function NominaVacacionesPage() {
       }
       alert(`WhatsApp enviado a ${data.to ?? employeeName}`);
       await load();
-      setMessagePreview(null);
+      setWhatsappPreview(null);
     } finally {
       setSendingId(null);
       setPreviewSending(false);
@@ -297,13 +358,17 @@ export default function NominaVacacionesPage() {
               />
             </label>
             <label className="text-sm md:col-span-2">
-              Inicio disfrute vacaciones (opcional)
+              Inicio de vacaciones (requerido para recibo y último día hábil)
               <input
                 type="date"
                 className="mt-1 w-full border rounded px-2 py-1"
                 value={vacationStartDate}
-                onChange={(e) => setVacationStartDate(e.target.value)}
+                onChange={(e) => {
+                  setVacationStartDate(e.target.value);
+                  setPreview(null);
+                }}
                 aria-label="Inicio disfrute vacaciones"
+                required
               />
             </label>
           </div>
@@ -332,17 +397,47 @@ export default function NominaVacacionesPage() {
             >
               {saving ? "Guardando…" : "Guardar liquidación"}
             </button>
+            {preview && vacationStartDate && (
+              <button
+                type="button"
+                onClick={() => setDraftReciboPreview(previewToRecibo(preview))}
+                className="px-4 py-2 border border-sky-300 text-sky-800 rounded-lg hover:bg-sky-50"
+              >
+                Vista previa del recibo
+              </button>
+            )}
           </div>
 
           {preview && (
-            <div className="rounded-lg border bg-gray-50 p-4 text-sm space-y-1">
+            <div className="rounded-lg border bg-gray-50 p-4 text-sm space-y-2">
+              <p className="font-semibold text-gray-900">{preview.employeeName}</p>
               <p>
-                <strong>{preview.employeeName}</strong> — {preview.daysWorked} días causados
+                <span className="text-gray-500">Período a liquidar: </span>
+                <span className="capitalize">{preview.periodLabelLong}</span>
               </p>
+              {preview.vacationStartLabelLong && (
+                <p>
+                  <span className="text-gray-500">Inicio vacaciones: </span>
+                  <span className="capitalize">{preview.vacationStartLabelLong}</span>
+                </p>
+              )}
+              {preview.vacationEndLabelLong && (
+                <p>
+                  <span className="text-gray-500">Último día hábil: </span>
+                  <span className="capitalize">{preview.vacationEndLabelLong}</span>
+                  <span className="text-gray-500">
+                    {" "}
+                    ({preview.vacationBusinessDays} días hábiles lun–sáb)
+                  </span>
+                </p>
+              )}
               <p className="text-lg font-bold text-sky-800">
                 {formatCop(preview.vacationAmount)}
               </p>
-              <p className="text-gray-600">≈ {preview.equivalentVacationDays} días de salario</p>
+              <p className="text-gray-600">
+                {preview.daysWorked} días causados · ≈ {preview.equivalentVacationDays} días de
+                salario
+              </p>
               <p className="text-xs text-gray-500 font-mono">{preview.formula}</p>
             </div>
           )}
@@ -396,25 +491,14 @@ export default function NominaVacacionesPage() {
                         </span>
                       </td>
                       <td className="p-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleOpenMessagePreview(row)}
-                            className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                          >
-                            Ver mensaje
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void handleSendWhatsApp(row.id, row.employeeName ?? "")
-                            }
-                            disabled={!row.phone || sendingId === row.id}
-                            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                          >
-                            {sendingId === row.id ? "Enviando…" : "Enviar"}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenWhatsAppPreview(row)}
+                          disabled={!row.phone || sendingId === row.id}
+                          className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {sendingId === row.id ? "Enviando…" : "Enviar WhatsApp"}
+                        </button>
                       </td>
                       <td className="p-3">
                         <a
@@ -442,38 +526,66 @@ export default function NominaVacacionesPage() {
         </div>
       </div>
 
-      {messagePreview && (
+      {draftReciboPreview && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="vac-message-title"
+          aria-labelledby="vac-draft-recibo-title"
         >
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 id="vac-message-title" className="font-semibold text-lg">
-              Mensaje — {messagePreview.employeeName}
+          <div className="bg-gray-50 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 my-4">
+            <h3 id="vac-draft-recibo-title" className="font-semibold text-lg text-gray-900">
+              Vista previa del recibo (sin guardar)
             </h3>
-            <pre className="whitespace-pre-wrap text-sm bg-gray-50 rounded-lg p-4 border text-gray-800 font-sans">
-              {messagePreview.text}
-            </pre>
-            <div className="flex flex-wrap gap-2 justify-end">
+            <VacacionReciboContent recibo={draftReciboPreview} />
+            <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setMessagePreview(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                onClick={() => setDraftReciboPreview(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-white bg-white"
               >
                 Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {whatsappPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vac-whatsapp-preview-title"
+        >
+          <div className="bg-gray-50 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 my-4">
+            <h3 id="vac-whatsapp-preview-title" className="font-semibold text-lg text-gray-900">
+              Revisa el recibo antes de enviar — {whatsappPreview.employeeName}
+            </h3>
+            <VacacionReciboContent recibo={whatsappPreview.recibo} />
+            <details className="text-sm">
+              <summary className="cursor-pointer text-gray-600 hover:text-gray-900">
+                Texto del mensaje WhatsApp
+              </summary>
+              <pre className="whitespace-pre-wrap mt-2 text-xs bg-white rounded-lg p-3 border text-gray-800 font-sans">
+                {whatsappPreview.messageText}
+              </pre>
+            </details>
+            <div className="flex flex-wrap gap-2 justify-end">
               <button
                 type="button"
-                onClick={() => {
-                  setPreviewSending(true);
-                  void handleSendWhatsApp(messagePreview.id, messagePreview.employeeName);
-                }}
+                onClick={() => setWhatsappPreview(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-white bg-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSendWhatsAppConfirmed()}
                 disabled={previewSending}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                {previewSending ? "Enviando…" : "Enviar WhatsApp"}
+                {previewSending ? "Enviando…" : "Confirmar y enviar WhatsApp"}
               </button>
             </div>
           </div>
