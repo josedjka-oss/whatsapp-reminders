@@ -44,12 +44,18 @@ const TASK_UI: Record<
     title: "Sacar Basura",
     schedule: "Lun / Mié / Vie · 6:00 p.m. · no festivos",
   },
+  ASEO_BANO: {
+    emoji: "🚽",
+    title: "Aseo Baño",
+    schedule: "Asignación v11 · mensajeros",
+  },
 };
 
 const emptyTaskMap = (): TaskMessagesMap => ({
   ASEO_RECEPCION: [],
   COCINA_RECEPCION: [],
   SACAR_BASURA: [],
+  ASEO_BANO: [],
 });
 
 export default function MessagesPage() {

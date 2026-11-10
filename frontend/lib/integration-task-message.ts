@@ -1,17 +1,20 @@
 export type IntegrationTaskKind =
   | "ASEO_RECEPCION"
   | "COCINA_RECEPCION"
-  | "SACAR_BASURA";
+  | "SACAR_BASURA"
+  | "ASEO_BANO";
 
 export const INTEGRATION_TASK_LABELS: Record<IntegrationTaskKind, string> = {
   ASEO_RECEPCION: "Aseo Recepción",
   COCINA_RECEPCION: "Aseo Cocina-Pasillo",
   SACAR_BASURA: "Sacar Basura",
+  ASEO_BANO: "Aseo Baño",
 };
 
 export const INTEGRATION_TASK_ORDER: IntegrationTaskKind[] = [
   "ASEO_RECEPCION",
   "COCINA_RECEPCION",
+  "ASEO_BANO",
   "SACAR_BASURA",
 ];
 
@@ -27,6 +30,14 @@ export const detectIntegrationTaskKind = (
   body: string
 ): IntegrationTaskKind | null => {
   const n = normalizeBody(body);
+
+  if (
+    n.includes("aseo bano") ||
+    n.includes("aseo del bano") ||
+    (/^hola\s+/.test(n) && n.includes("aseo") && n.includes("bano"))
+  ) {
+    return "ASEO_BANO";
+  }
 
   if (/^aseo recepcion\s*[-–—]/.test(n) || n.startsWith("aseo recepcion")) {
     return "ASEO_RECEPCION";
@@ -71,6 +82,7 @@ export const partitionMessagesByTask = <
     ASEO_RECEPCION: [],
     COCINA_RECEPCION: [],
     SACAR_BASURA: [],
+    ASEO_BANO: [],
   };
   const otherMessages: T[] = [];
 

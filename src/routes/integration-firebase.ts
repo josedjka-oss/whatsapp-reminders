@@ -8,8 +8,15 @@ import { parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale";
 import { prisma } from "../db";
-import { EMPLOYEE_NAMES } from "../services/turnos-tareas/constants";
-import { loadEmployeePhone } from "../services/turnos-tareas/firestore";
+import {
+  buildAseoBanoReminderText,
+  INTEGRATION_TASK_LABELS,
+  type IntegrationTaskKind,
+  isMessengerAllowedForTask,
+  messengerBlockReason,
+  normalizeIntegrationTaskKind,
+  resolveIntegrationEmployee,
+} from "../services/integration-turnos-tasks";
 import { sendWhatsAppMessage } from "../services/twilio";
 import { normalizeWhatsAppPhoneNumber } from "../utils/whatsapp-phone-normalize";
 
@@ -17,10 +24,8 @@ const router = Router();
 
 const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 
-type TaskKind = "ASEO_RECEPCION" | "COCINA_RECEPCION" | "SACAR_BASURA";
-
 const TASK_META: Record<
-  TaskKind,
+  Exclude<IntegrationTaskKind, "ASEO_BANO">,
   { label: string; timeLabel: string }
 > = {
   ASEO_RECEPCION: {
@@ -73,32 +78,18 @@ const requireIntegrationSecret = (
   next();
 };
 
-const normalizeTaskKind = (raw: unknown): TaskKind | null => {
-  const s = String(raw ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/[\s.-]+/g, "_");
-
-  if (s === "ASEO_RECEPCION" || s === "ASEO" || s === "RECEPCION") {
-    return "ASEO_RECEPCION";
-  }
-  if (s === "COCINA_RECEPCION" || s === "COCINA" || s === "COCINA_PASILLO" || s === "ASEO_COCINA_PASILLO") {
-    return "COCINA_RECEPCION";
-  }
-  if (s === "SACAR_BASURA" || s === "BASURA") {
-    return "SACAR_BASURA";
-  }
-
-  return null;
-};
-
 /** Día civil en Bogotá (UTC-5 fijo sin DST) sobre el que etiquetamos el mensaje */
 const noonBogotaOnDateStr = (ymd: string): Date => parseISO(`${ymd}T12:00:00-05:00`);
 
 const buildIntegratedReminderBody = (
-  task: TaskKind,
-  anchorDateUtc: Date
+  task: IntegrationTaskKind,
+  anchorDateUtc: Date,
+  displayName: string
 ): string => {
+  if (task === "ASEO_BANO") {
+    return buildAseoBanoReminderText(displayName);
+  }
+
   const meta = TASK_META[task];
   const datePart = formatInTimeZone(anchorDateUtc, APP_TIMEZONE, "EEEE d 'de' MMMM yyyy", {
     locale: es,
@@ -107,7 +98,14 @@ const buildIntegratedReminderBody = (
 };
 
 /** Versión del contrato de tareas (útil para verificar deploy en Render). */
-export const INTEGRATION_TASKS_VERSION = "2026-07-03-empId";
+export const INTEGRATION_TASKS_VERSION = "2026-11-11-aseo-bano-mensajeros";
+
+const outboundBodyFilterForTask = (task: IntegrationTaskKind): { startsWith: string } => {
+  if (task === "ASEO_BANO") {
+    return { startsWith: "Hola " };
+  }
+  return { startsWith: INTEGRATION_TASK_LABELS[task] };
+};
 
 const ensureContactForIntegration = async (
   phone: string,
@@ -149,10 +147,14 @@ const ensureContactForIntegration = async (
 router.get("/firebase/tasks", (_req, res) => {
   return res.json({
     version: INTEGRATION_TASKS_VERSION,
-    tasks: Object.keys(TASK_META),
-    labels: Object.fromEntries(
-      (Object.keys(TASK_META) as TaskKind[]).map((k) => [k, TASK_META[k].label])
-    ),
+    tasks: Object.keys(INTEGRATION_TASK_LABELS),
+    labels: INTEGRATION_TASK_LABELS,
+    messengersAllowed: {
+      ASEO_RECEPCION: false,
+      ASEO_BANO: true,
+      COCINA_RECEPCION: true,
+      SACAR_BASURA: true,
+    },
     contract: {
       post: "/api/integration/firebase/whatsapp",
       required: "task + (phone | empId)",
@@ -173,7 +175,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const date = String(req.query.date || "").trim();
-      const taskKind = normalizeTaskKind(req.query.task);
+      const taskKind = normalizeIntegrationTaskKind(req.query.task);
       const empId = String(req.query.empId || "").trim() || null;
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -181,20 +183,21 @@ router.get(
       }
       if (!taskKind) {
         return res.status(400).json({
-          error: "task inválida (ASEO_RECEPCION | COCINA_RECEPCION | SACAR_BASURA)",
+          error:
+            "task inválida (ASEO_RECEPCION | COCINA_RECEPCION | SACAR_BASURA | ASEO_BANO)",
         });
       }
 
       const [year, month, day] = date.split("-").map(Number);
       const startOfDay = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
       const endOfDay = new Date(Date.UTC(year, month - 1, day + 1, 4, 59, 59, 999));
-      const label = TASK_META[taskKind].label;
+      const bodyFilter = outboundBodyFilterForTask(taskKind);
 
       let phoneFilter: string | null = null;
       if (empId) {
-        phoneFilter = await loadEmployeePhone(empId);
-        if (phoneFilter) {
-          phoneFilter = normalizeWhatsAppPhoneNumber(phoneFilter);
+        const resolved = await resolveIntegrationEmployee(empId);
+        if (resolved.phone) {
+          phoneFilter = normalizeWhatsAppPhoneNumber(resolved.phone);
         }
       }
 
@@ -202,7 +205,7 @@ router.get(
         where: {
           direction: "outbound",
           createdAt: { gte: startOfDay, lte: endOfDay },
-          body: { startsWith: label },
+          body: bodyFilter,
           ...(phoneFilter ? { to: phoneFilter } : {}),
         },
         orderBy: { createdAt: "desc" },
@@ -267,19 +270,6 @@ router.get(
  * Solo WHATS arma el texto y envía por Twilio. Turnos u otra app manda señal suelta: tarea + destino.
  *
  * POST /api/integration/firebase/whatsapp
- *
- * Headers: Authorization: Bearer <INTEGRATION_FIREBASE_SECRET> | x-api-key misma valor
- *
- * Body JSON obligatorio:
- *  - task o tipo o kind — ASEO_RECEPCION | COCINA_RECEPCION | SACAR_BASURA (aliases: ASEO, COCINA, BASURA, …)
- *  - Destino (uno de los dos):
- *      · empId o employeeId o empleadoId — WHATS busca teléfono en Firebase empleadosTelefonos y registra contacto si falta
- *      · phone o to — debe existir en tabla Contact (mismo formato que /api/contacts)
- *
- * Opcional:
- *  - date o dia o referenceDate — yyyy-MM-DD (fecha a mostrar; por defecto hoy en APP_TIMEZONE)
- *
- * Prohibido (400 si vienen en el JSON): message, body, text, nombre, name, contenido arbitrario ajeno al contrato (ver FORBIDDEN_INTEGRATION_BODY_KEYS).
  */
 const FORBIDDEN_INTEGRATION_BODY_KEYS = [
   "message",
@@ -326,11 +316,11 @@ router.post(
         req.body.referenceDate ??
         req.body.reference_date;
 
-      const taskKind = normalizeTaskKind(rawTask);
+      const taskKind = normalizeIntegrationTaskKind(rawTask);
       if (!taskKind) {
         return res.status(400).json({
           error:
-            'Falta "task" válido (o "tipo" / "kind"): ASEO_RECEPCION, COCINA_RECEPCION o SACAR_BASURA.',
+            'Falta "task" válido (o "tipo" / "kind"): ASEO_RECEPCION, COCINA_RECEPCION, SACAR_BASURA, ASEO_BANO.',
         });
       }
 
@@ -349,17 +339,26 @@ router.post(
       let contactName: string;
 
       if (hasEmpId) {
-        resolvedEmpId = rawEmpId.trim();
-        const phoneFromFirebase = await loadEmployeePhone(resolvedEmpId);
-        if (!phoneFromFirebase) {
-          return res.status(404).json({
-            error: `Sin teléfono en Firebase empleadosTelefonos para empId "${resolvedEmpId}".`,
+        const resolved = await resolveIntegrationEmployee(String(rawEmpId).trim());
+        resolvedEmpId = resolved.empId;
+        contactName = resolved.displayName;
+
+        if (!isMessengerAllowedForTask(taskKind, resolvedEmpId)) {
+          return res.status(403).json({
+            error: messengerBlockReason(taskKind),
+            task: taskKind,
             empId: resolvedEmpId,
           });
         }
-        to = normalizeWhatsAppPhoneNumber(phoneFromFirebase);
-        const displayName = EMPLOYEE_NAMES[resolvedEmpId] || resolvedEmpId;
-        const contactCheck = await ensureContactForIntegration(to, displayName, {
+
+        if (!resolved.phone) {
+          return res.status(404).json({
+            error: `Sin teléfono en Firebase empleadosTelefonos ni en nómina para empId "${resolvedEmpId}".`,
+            empId: resolvedEmpId,
+          });
+        }
+        to = normalizeWhatsAppPhoneNumber(resolved.phone);
+        const contactCheck = await ensureContactForIntegration(to, contactName, {
           autoCreate: true,
         });
         if (!contactCheck.ok) {
@@ -367,7 +366,7 @@ router.post(
         }
         contactName = contactCheck.contactName;
       } else {
-        to = normalizeWhatsAppPhoneNumber(rawPhone.trim());
+        to = normalizeWhatsAppPhoneNumber(String(rawPhone).trim());
         const contactCheck = await ensureContactForIntegration(to, to, {
           autoCreate: false,
         });
@@ -391,8 +390,11 @@ router.post(
         );
       }
 
-      /** Sin prefijo nombre; mismo tono para plantilla WhatsApp ({1}). */
-      const reminderText = buildIntegratedReminderBody(taskKind, anchorDateUtc);
+      const reminderText = buildIntegratedReminderBody(
+        taskKind,
+        anchorDateUtc,
+        contactName
+      );
 
       const sid = await sendWhatsAppMessage({
         to,

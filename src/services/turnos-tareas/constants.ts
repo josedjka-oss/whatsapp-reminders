@@ -5,16 +5,14 @@ export const APP_TIMEZONE = process.env.APP_TIMEZONE || "America/Bogota";
 export const AM_NORMAL = "9";
 export const AM_SABADO = "930";
 
-/** Mismo orden que recepcion-aseo.js */
+/** Alineado con TURNOS public/js/tareas.js (ASEO / BASURA). Sin mensajeros. */
 export const ASEO_RECEPCION_IDS = [
-  "harold_paipa",
-  "diego_lozano",
-  "dilan_toro",
   "santiago_guarnizo",
-  "brandon",
+  "brayan_ramirez",
+  "jesus_perez",
+  "jhonny_rodriguez",
   "cristian_uribe",
   "jhon_lozano",
-  "jesus_perez",
 ] as const;
 
 export const COCINA_RECEPCION_IDS = [...ASEO_RECEPCION_IDS];
@@ -27,11 +25,11 @@ export const BASURA_SACADA_IDS = [
   "diego_lozano",
   "dilan_toro",
   "santiago_guarnizo",
+  "brayan_ramirez",
+  "jesus_perez",
+  "jhonny_rodriguez",
   "cristian_uribe",
   "jhon_lozano",
-  "jesus_perez",
-  "brayan_ramirez",
-  "brandon",
 ] as const;
 
 export const EMPLOYEE_NAMES: Record<string, string> = {
@@ -39,7 +37,6 @@ export const EMPLOYEE_NAMES: Record<string, string> = {
   diego_lozano: "DIEGO LOZANO",
   dilan_toro: "DILAN TORO",
   santiago_guarnizo: "SANTIAGO GUARNIZO",
-  brandon: "BRANDON",
   cristian_uribe: "CRISTIAN URIBE",
   jhon_lozano: "JHON LOZANO",
   jesus_perez: "JESÚS PÉREZ",
@@ -50,6 +47,8 @@ export const EMPLOYEE_NAMES: Record<string, string> = {
   brayan_yate: "BRAYAN YATE",
   mauricio_bautista: "MAURICIO BAUTISTA",
   david_sanchez: "DAVID SÁNCHEZ",
+  david_santiago: "DAVID SANTIAGO",
+  cristian_forero: "CRISTIAN FORERO",
   jonathan_sanchez: "JONATHAN SÁNCHEZ",
 };
 
